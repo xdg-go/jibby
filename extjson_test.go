@@ -75,6 +75,16 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary legacy, keys reversed",
+			input:  `{"x" : { "$type" : "03", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
+			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$binary legacy, keys reversed, single type digit",
+			input:  `{"x" : { "$type" : "03", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
+			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",

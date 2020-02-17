@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"regexp"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -228,8 +229,137 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 	return nil, nil
 }
 
+// Starts after `"` of `"$type"` for key.  Need to distinguish between
+// Extended JSON $type or MongoDB $type query operator.
+// If we can peek far enough, we can check with regular expresssions.
+
+var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s+:\s+"\d\d?"`)
+var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s+:\s+(\d+|"\w+"|\{)`)
+
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
-	return nil, nil
+	// Peek ahead successively longer; shouldn't be necessary but
+	// covers a pathological case with excessive white space
+	var isExtJSON bool
+	peekDistance := 64
+	var err error
+	var buf []byte
+	for peekDistance < d.json.Size() {
+		buf, err = d.json.Peek(peekDistance)
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+		}
+		// Smallest possible valid buffer is 10 chars: `$type":"0"`
+		if len(buf) < 10 {
+			return nil, newReadError(io.ErrUnexpectedEOF)
+		}
+		if dollarTypeExtJSONRe.Match(buf) {
+			isExtJSON = true
+			break
+		} else if dollarTypeQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		}
+		if len(buf) < peekDistance {
+			break
+		}
+		peekDistance *= 2
+	}
+	if !isExtJSON {
+		return nil, fmt.Errorf("parse error: could not find value for $type within buffer lookahead starting at %q", string(buf))
+	}
+
+	// Write the type byte and hold space for length and subtype
+	overwriteTypeByte(out, typeBytePos, bsonBinary)
+	lengthPos := len(out)
+	out = append(out, emptyLength...)
+	subTypeBytePos := len(out)
+	out = append(out, emptyType)
+
+	// Discard $type key and closing quote
+	d.json.Discard(6)
+	// Read name separator and opening quote
+	err = d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	// Read type bytes, decode, and write them
+	out, err = d.convertBinarySubType(out, subTypeBytePos)
+	if err != nil {
+		return nil, err
+	}
+
+	// $binary key must be next
+	err = d.readCharAfterWS(',')
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	key, err := d.peekBoundedQuote(8, 8)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Compare(key, jsonBinary) != 0 {
+		d.parseError(key[0], "expected $binary")
+	}
+	d.json.Discard(len(key) + 1)
+	err = d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	out, err = d.convertBase64(out)
+	if err != nil {
+		return nil, err
+	}
+
+	// write length of binary payload (added length minux 5 bytes for
+	// length+type)
+	binLength := len(out) - lengthPos - 5
+	overwriteLength(out, lengthPos, binLength)
+
+	// Must end with document terminator, but unread it to be checked
+	// at higher level
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+	d.json.UnreadByte()
+
+	return out, nil
+}
+
+func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, error) {
+	subTypeBytes, err := d.peekBoundedQuote(2, 3)
+	if err != nil {
+		return nil, err
+	}
+	// Go requires even digits to decode hex.
+	normalizedSubType := subTypeBytes
+	if len(normalizedSubType) == 1 {
+		normalizedSubType = []byte{'0', normalizedSubType[0]}
+	}
+	var x [1]byte
+	xs := x[0:1]
+	_, err = hex.Decode(xs, normalizedSubType)
+	if err != nil {
+		return nil, d.parseError(subTypeBytes[0], fmt.Sprintf("error parsing subtype: %v", err))
+	}
+	overwriteTypeByte(out, subTypeBytePos, xs[0])
+	d.json.Discard(len(subTypeBytes) + 1)
+
+	return out, nil
 }
 
 func (d *Decoder) convertScope(out []byte) ([]byte, error) {
@@ -314,23 +444,10 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			subTypeBytes, err := d.peekBoundedQuote(2, 3)
+			out, err = d.convertBinarySubType(out, subTypeBytePos)
 			if err != nil {
 				return nil, err
 			}
-			// Go requires even digits to decode hex.
-			normalizedSubType := subTypeBytes
-			if len(normalizedSubType) == 1 {
-				normalizedSubType = []byte{'0', normalizedSubType[0]}
-			}
-			var x [1]byte
-			xs := x[0:1]
-			_, err = hex.Decode(xs, normalizedSubType)
-			if err != nil {
-				return nil, d.parseError(key[0], fmt.Sprintf("error parsing subtype: %v", err))
-			}
-			overwriteTypeByte(out, subTypeBytePos, xs[0])
-			d.json.Discard(len(subTypeBytes) + 1)
 			if !sawBase64 {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -422,23 +539,10 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	subTypeBytes, err := d.peekBoundedQuote(2, 3)
+	out, err = d.convertBinarySubType(out, subTypeBytePos)
 	if err != nil {
 		return nil, err
 	}
-	// Go requires even digits to decode hex.
-	normalizedSubType := subTypeBytes
-	if len(normalizedSubType) == 1 {
-		normalizedSubType = []byte{'0', normalizedSubType[0]}
-	}
-	var x [1]byte
-	xs := x[0:1]
-	_, err = hex.Decode(xs, normalizedSubType)
-	if err != nil {
-		return nil, d.parseError(key[0], fmt.Sprintf("error parsing subtype: %v", err))
-	}
-	overwriteTypeByte(out, subTypeBytePos, xs[0])
-	d.json.Discard(len(subTypeBytes) + 1)
 
 	// write length of binary payload (added length minux 5 bytes for
 	// length+type)
