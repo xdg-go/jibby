@@ -65,6 +65,8 @@ Extended JSON support is incomplete.
 * Only well-formed UTF-8 encoding (including optional BOM) is supported.
 * Numbers (floats and ints) must conform to formats/limits of Go's
   [strconv](https://golang.org/pkg/strconv/) library.
+* Escape sequences not supported in extended JSON keys and some extended JSON
+  values.
 
 # Testing
 
