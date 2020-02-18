@@ -202,6 +202,23 @@ func (d *Decoder) readQuoteStart() error {
 	return nil
 }
 
+func (d *Decoder) readSpecificKey(expected []byte) error {
+	charsNeeded := len(expected) + 1
+	key, err := d.peekBoundedQuote(charsNeeded, charsNeeded)
+	if err != nil {
+		return err
+	}
+	if bytes.Compare(key, expected) != 0 {
+		d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
+	}
+	d.json.Discard(len(key) + 1)
+	err = d.readNameSeparator()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *Decoder) peekBoundedQuote(minLen, maxLen int) ([]byte, error) {
 	buf, err := d.json.Peek(maxLen)
 	if err != nil {

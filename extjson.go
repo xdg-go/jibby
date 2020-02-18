@@ -221,8 +221,84 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// Starts after `"$code"`.  Need to find out if it's just $code or followed by
+// $scope to determine type byte.
+//
+// Problem is that code is just "string" and code w/scope is "int32 string
+// document", so we can't copy code string to output until after we see if there
+// is a $scope key so we know if we need the int32 length part.
 func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
-	return nil, nil
+	// Whether code string or code w/scope, need to reserve 4 bytes for a length.
+	lengthPos := len(out)
+	out = append(out, emptyLength...)
+
+	// Consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	// Consume '"'
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+
+	// Make a copy of code cstring to defer writing
+	codeCString := make([]byte, 0, 256)
+	codeCString, err = d.convertCString(codeCString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Look for value separator or object terminator
+	ch, err := d.readAfterWS()
+	if err != nil {
+		return nil, newReadError(err)
+	}
+	switch ch {
+	case '}':
+		// Just $code
+		overwriteTypeByte(out, typeBytePos, bsonCode)
+		out = append(out, codeCString...)
+		// BSON code length is CString length, not including length bytes
+		strLength := len(out) - lengthPos - 4
+		overwriteLength(out, lengthPos, strLength)
+	case ',':
+		// Maybe followed by $scope
+		err = d.readQuoteStart()
+		if err != nil {
+			return nil, err
+		}
+		err = d.readSpecificKey(jsonScope)
+		if err != nil {
+			return nil, err
+		}
+
+		// We know it's code w/ scope: write Cstring with length, then object
+		overwriteTypeByte(out, typeBytePos, bsonCodeWithScope)
+		strLengthPos := len(out)
+		out = append(out, emptyLength...)
+		out = append(out, codeCString...)
+		strLength := len(out) - strLengthPos - 4
+		overwriteLength(out, strLengthPos, strLength)
+
+		err = d.readCharAfterWS('{')
+		if err != nil {
+			return nil, err
+		}
+		out, err = d.convertObject(out, topContainer)
+		if err != nil {
+			return nil, err
+		}
+
+		// BSON code w/scope length is total length including length bytes
+		cwsLength := len(out) - lengthPos
+		overwriteLength(out, lengthPos, cwsLength)
+	default:
+		return nil, d.parseError(ch, "expected value separator or end of object")
+	}
+
+	return out, nil
 }
 
 func (d *Decoder) convertDate(out []byte) ([]byte, error) {
@@ -303,15 +379,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := d.peekBoundedQuote(8, 8)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Compare(key, jsonBinary) != 0 {
-		d.parseError(key[0], "expected $binary")
-	}
-	d.json.Discard(len(key) + 1)
-	err = d.readNameSeparator()
+	err = d.readSpecificKey(jsonBinary)
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +430,58 @@ func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, 
 	return out, nil
 }
 
+// Leading $scope means code w/ scope, but we have to buffer the scope
+// document and write it after we convert the code string
 func (d *Decoder) convertScope(out []byte) ([]byte, error) {
-	return nil, nil
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	cwsLengthPos := len(out)
+	out = append(out, emptyLength...)
+
+	scopeDoc := make([]byte, 0, 256)
+	err = d.readCharAfterWS('{')
+	if err != nil {
+		return nil, err
+	}
+	scopeDoc, err = d.convertObject(scopeDoc, topContainer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read $code
+	err = d.readCharAfterWS(',')
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readSpecificKey(jsonCode)
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	out, err = d.convertString(out)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write buffered scope
+	out = append(out, scopeDoc...)
+
+	// BSON code w/scope length is total length including length bytes
+	cwsLength := len(out) - cwsLengthPos
+	overwriteLength(out, cwsLengthPos, cwsLength)
+
+	return out, nil
 }
 
 func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {

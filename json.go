@@ -92,9 +92,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 	switch ch {
 	case '}':
 		// Empty object
-		out = append(out, nullByte)
-		objectLength := len(out) - lengthPos
-		overwriteLength(out, lengthPos, objectLength)
+		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
 		// If ExtJSON enabled and found, delegate value writing to it.  If it

@@ -5,6 +5,7 @@ const nullByte byte = 0
 const topContainer = -1
 
 var emptyLength = []byte{0, 0, 0, 0}
+var emptyDoc = []byte{5, 0, 0, 0, 0}
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 var utf16LEBOM = []byte{0xFF, 0xFE}
 var utf32LEBOM = []byte{0xFF, 0xFE, 0x00, 0x00}

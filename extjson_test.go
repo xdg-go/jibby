@@ -85,6 +85,21 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$code",
+			input:  `{"a" : {"$code" : "abababababab"}}`,
+			output: "190000000D61000D0000006162616261626162616261620000",
+		},
+		{
+			label:  "$code $scope",
+			input:  `{"a" : {"$code" : "\u00e9\u0000d", "$scope" : {}}}`,
+			output: "1A0000000F61001200000005000000C3A9006400050000000000",
+		},
+		{
+			label:  "$code $scope, keys reversed",
+			input:  `{"a" : {"$scope" : {}, "$code" : "\u00e9\u0000d"}}`,
+			output: "1A0000000F61001200000005000000C3A9006400050000000000",
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",
