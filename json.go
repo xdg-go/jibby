@@ -358,58 +358,27 @@ func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 }
 
 func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
-	var err error
-	var isFloat bool
-	var terminated bool
-
-	buf, err := d.json.Peek(doublePeekWidth)
+	buf, isFloat, err := d.peekNumber()
 	if err != nil {
-		// here, io.EOF is OK, since we're peeking and may hit end of
-		// object
-		if err != io.EOF {
-			return nil, err
-		}
-	}
-
-	// Find where the number appears to ends and if it's a float.
-	var i int
-LOOP:
-	for i = 0; i < len(buf); i++ {
-		switch buf[i] {
-		case 'e', 'E', '.':
-			isFloat = true
-		case ' ', '\t', '\n', '\r', ',', ']', '}':
-			terminated = true
-			break LOOP
-		}
-	}
-
-	if !terminated {
-		if len(buf) < doublePeekWidth {
-			return nil, newReadError(io.ErrUnexpectedEOF)
-		}
-		return nil, d.parseError(buf[i-1], "number too long")
+		return nil, err
 	}
 
 	if isFloat {
 		overwriteTypeByte(out, typeBytePos, bsonDouble)
-		out, err = d.convertFloat(out, buf[0:i])
+		out, err = d.convertFloat(out, buf)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Still don't know the type, so delegate.
-		out, err = d.convertInt(out, typeBytePos, buf[0:i])
+		out, err = d.convertInt(out, typeBytePos, buf)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// i is at terminator or whitespace, so discard just before that.
-	_, err = d.json.Discard(i)
-	if err != nil {
-		return nil, fmt.Errorf("unexpected error discarding buffered reader: %v", err)
-	}
+	d.json.Discard(len(buf))
+
 	return out, nil
 }
 

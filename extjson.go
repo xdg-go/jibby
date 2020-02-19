@@ -769,7 +769,100 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 }
 
 func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
-	return nil, nil
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	// Require object start
+	err = d.readCharAfterWS('{')
+	if err != nil {
+		return nil, err
+	}
+
+	// Need to see exactly 2 keys, 't' and 'i', in any order.
+	var timestamp uint32
+	var increment uint32
+	var sawT bool
+	var sawI bool
+	for {
+		// Read key and skip ahead to start of value.
+		err := d.readQuoteStart()
+		if err != nil {
+			return nil, err
+		}
+		ch, err := d.json.ReadByte()
+		if err != nil {
+			return nil, newReadError(err)
+		}
+		err = d.readNextChar('"')
+		if err != nil {
+			return nil, err
+		}
+		err = d.readNameSeparator()
+		if err != nil {
+			return nil, err
+		}
+		err = d.skipWS()
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle the key.
+		switch ch {
+		case 't':
+			if sawT {
+				return nil, d.parseError(ch, "key 't' repeated")
+			}
+			sawT = true
+			timestamp, err = d.readUInt32()
+			if err != nil {
+				return nil, err
+			}
+			if !sawI {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		case 'i':
+			if sawI {
+				return nil, d.parseError(ch, "key 'i' repeated")
+			}
+			sawI = true
+			increment, err = d.readUInt32()
+			if err != nil {
+				return nil, err
+			}
+			if !sawT {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		default:
+			return nil, d.parseError(ch, "invalid key for $timestamp document")
+		}
+		if sawT && sawI {
+			break
+		}
+	}
+
+	// Write increment and timestamp in that order
+	var x [4]byte
+	xs := x[0:4]
+	binary.LittleEndian.PutUint32(xs, increment)
+	out = append(out, xs...)
+	binary.LittleEndian.PutUint32(xs, timestamp)
+	out = append(out, xs...)
+
+	// Must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {

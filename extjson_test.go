@@ -100,6 +100,16 @@ func TestExtJSON(t *testing.T) {
 			output: "1A0000000F61001200000005000000C3A9006400050000000000",
 		},
 		{
+			label:  "$timestamp",
+			input:  `{"a" : {"$timestamp" : {"t" : 123456789, "i" : 42} } }`,
+			output: "100000001161002A00000015CD5B0700",
+		},
+		{
+			label:  "$timestamp, keys reversed",
+			input:  `{"a" : {"$timestamp" : {"i" : 42, "t" : 123456789} } }`,
+			output: "100000001161002A00000015CD5B0700",
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",

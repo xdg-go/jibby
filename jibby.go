@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 // Decoder reads and decodes JSON objects to BSON from a buffered input stream.
@@ -157,6 +158,8 @@ func (d *Decoder) readAfterWS() (byte, error) {
 	for {
 		ch, err = d.json.ReadByte()
 		if err != nil {
+			// Don't use newReadError here as we don't know if there must be
+			// another character.  Let the caller decide.
 			return 0, err
 		}
 		switch ch {
@@ -167,8 +170,28 @@ func (d *Decoder) readAfterWS() (byte, error) {
 	}
 }
 
+func (d *Decoder) skipWS() error {
+	_, err := d.readAfterWS()
+	if err != nil {
+		return err
+	}
+	d.json.UnreadByte()
+	return nil
+}
+
 func (d *Decoder) readCharAfterWS(b byte) error {
 	ch, err := d.readAfterWS()
+	if err != nil {
+		return newReadError(err)
+	}
+	if ch != b {
+		return d.parseError(ch, fmt.Sprintf("expecting '%c'", b))
+	}
+	return nil
+}
+
+func (d *Decoder) readNextChar(b byte) error {
+	ch, err := d.json.ReadByte()
 	if err != nil {
 		return newReadError(err)
 	}
@@ -217,6 +240,88 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (d *Decoder) peekNumber() ([]byte, bool, error) {
+	var isFloat bool
+	var terminated bool
+
+	buf, err := d.json.Peek(doublePeekWidth)
+	if err != nil {
+		// here, io.EOF is OK, since we're peeking and may hit end of
+		// object
+		if err != io.EOF {
+			return nil, false, newReadError(err)
+		}
+	}
+
+	// Find where the number appears to ends and if it's a float.
+	var i int
+LOOP:
+	for i = 0; i < len(buf); i++ {
+		switch buf[i] {
+		case 'e', 'E', '.':
+			isFloat = true
+		case ' ', '\t', '\n', '\r', ',', ']', '}':
+			terminated = true
+			break LOOP
+		}
+	}
+
+	if !terminated {
+		if len(buf) < doublePeekWidth {
+			return nil, false, newReadError(io.ErrUnexpectedEOF)
+		}
+		return nil, false, d.parseError(buf[0], "number too long")
+	}
+
+	return buf[0:i], isFloat, nil
+}
+
+func (d *Decoder) peekUInt32() ([]byte, error) {
+	var terminated bool
+
+	buf, err := d.json.Peek(uint32PeekWidth)
+	if err != nil {
+		// here, io.EOF is OK, since we're peeking and may hit end of
+		// object
+		if err != io.EOF {
+			return nil, newReadError(err)
+		}
+	}
+
+	// Find where the number appears to ends.
+	var i int
+LOOP:
+	for i = 0; i < len(buf); i++ {
+		switch buf[i] {
+		case ' ', '\t', '\n', '\r', ',', ']', '}':
+			terminated = true
+			break LOOP
+		}
+	}
+
+	if !terminated {
+		if len(buf) < uint32PeekWidth {
+			return nil, newReadError(io.ErrUnexpectedEOF)
+		}
+		return nil, d.parseError(buf[0], "number too long")
+	}
+
+	return buf[0:i], nil
+}
+
+func (d *Decoder) readUInt32() (uint32, error) {
+	buf, err := d.peekUInt32()
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseUint(string(buf), 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("parser error: uint conversion: %v", err)
+	}
+	d.json.Discard(len(buf))
+	return uint32(n), nil
 }
 
 func (d *Decoder) peekBoundedQuote(minLen, maxLen int) ([]byte, error) {
