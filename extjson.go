@@ -1020,7 +1020,117 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 }
 
 func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
-	return nil, nil
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Require object start
+	err = d.readCharAfterWS('{')
+	if err != nil {
+		return nil, err
+	}
+
+	// Need to see exactly 2 keys, 'pattern' and 'options', in any order.
+	var pattern []byte
+	var options []byte
+	var sawPattern bool
+	var sawOptions bool
+	for {
+		// Read key and skip ahead to start of value.
+		err := d.readQuoteStart()
+		if err != nil {
+			return nil, err
+		}
+		key, err := d.peekBoundedQuote(8, 8)
+		if err != nil {
+			return nil, newReadError(err)
+		}
+
+		// Handle the key.
+		switch {
+		case bytes.Compare(key, jsonREpattern) == 0:
+			if sawPattern {
+				return nil, d.parseError(key[0], "key 'pattern' repeated")
+			}
+			sawPattern = true
+			d.json.Discard(len(key))
+			err = d.readNextChar('"')
+			if err != nil {
+				return nil, err
+			}
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			err = d.readQuoteStart()
+			if err != nil {
+				return nil, err
+			}
+
+			pattern = make([]byte, 0, 256)
+			pattern, err = d.convertCString(pattern)
+			if err != nil {
+				return nil, err
+			}
+
+			if !sawOptions {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		case bytes.Compare(key, jsonREoptions) == 0:
+			if sawOptions {
+				return nil, d.parseError(key[0], "key 'options' repeated")
+			}
+			sawOptions = true
+			d.json.Discard(len(key))
+			err = d.readNextChar('"')
+			if err != nil {
+				return nil, err
+			}
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			err = d.readQuoteStart()
+			if err != nil {
+				return nil, err
+			}
+
+			options = make([]byte, 0, 256)
+			options, err = d.convertCString(options)
+			if err != nil {
+				return nil, err
+			}
+
+			if !sawPattern {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		default:
+			return nil, d.parseError(key[0], "invalid key for $regularExpression document")
+		}
+		if sawPattern && sawOptions {
+			break
+		}
+	}
+
+	// Write pattern and options, in that order
+	out = append(out, pattern...)
+	out = append(out, options...)
+
+	// Must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 // starts after opening quote mark

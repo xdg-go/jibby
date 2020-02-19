@@ -75,6 +75,9 @@ var jsonNumberDouble = []byte{'$', 'n', 'u', 'm', 'b', 'e', 'r', 'D', 'o', 'u', 
 var jsonNumberDecimal = []byte{'$', 'n', 'u', 'm', 'b', 'e', 'r', 'D', 'e', 'c', 'i', 'm', 'a', 'l'}
 var jsonRegularExpression = []byte{'$', 'r', 'e', 'g', 'u', 'l', 'a', 'r', 'E', 'x', 'p', 'r', 'e', 's', 's', 'i', 'o', 'n'}
 
+var jsonREpattern = []byte{'p', 'a', 't', 't', 'e', 'r', 'n'}
+var jsonREoptions = []byte{'o', 'p', 't', 'i', 'o', 'n', 's'}
+
 var jsonBase64 = []byte{'b', 'a', 's', 'e', '6', '4'}
 var jsonSubType = []byte{'s', 'u', 'b', 'T', 'y', 'p', 'e'}
 

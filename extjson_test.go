@@ -110,6 +110,17 @@ func TestExtJSON(t *testing.T) {
 			output: "100000001161002A00000015CD5B0700",
 		},
 		{
+			label:  "$regularExpression",
+			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "im"}}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regularExpression, keys reversed",
+			input:  `{"a" : {"$regularExpression" : {"options" : "im", "pattern": "abc"}}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",
