@@ -888,7 +888,114 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 }
 
 func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
-	return nil, nil
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Inner object
+	err = d.readCharAfterWS('{')
+	if err != nil {
+		return nil, err
+	}
+
+	// Need to see exactly 2 keys, '$ref' and '$id', in any order.
+	var ref []byte
+	var id []byte
+	var sawRef bool
+	var sawID bool
+	for {
+		// Read key and skip ahead to start of value.
+		err := d.readQuoteStart()
+		if err != nil {
+			return nil, err
+		}
+		key, err := d.peekBoundedQuote(4, 5)
+		if err != nil {
+			return nil, newReadError(err)
+		}
+
+		// Handle the key.
+		switch {
+		case bytes.Compare(key, jsonRef) == 0:
+			if sawRef {
+				return nil, d.parseError(key[0], "key '$ref' repeated")
+			}
+			sawRef = true
+			d.json.Discard(len(key) + 1)
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			err = d.readQuoteStart()
+			if err != nil {
+				return nil, err
+			}
+
+			ref = make([]byte, 0, 256)
+			ref, err = d.convertString(ref)
+			if err != nil {
+				return nil, err
+			}
+
+			if !sawID {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		case bytes.Compare(key, jsonID) == 0:
+			if sawID {
+				return nil, d.parseError(key[0], "key '$id' repeated")
+			}
+			sawID = true
+			d.json.Discard(len(key) + 1)
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			// Value must be of type object ID.  Read the value into a temporary
+			// buffer, reserving the first byte for discovered type.
+			id = make([]byte, 1, 13)
+			id, err = d.convertValue(id, 0)
+			if err != nil {
+				return nil, err
+			}
+			if id[0] != bsonObjectID {
+				return nil, fmt.Errorf("parse error: $dbPointer.$id must be BSON type %d, not type %d", bsonObjectID, id[0])
+			}
+			if !sawRef {
+				err = d.readCharAfterWS(',')
+				if err != nil {
+					return nil, err
+				}
+			}
+		default:
+			return nil, d.parseError(key[0], "invalid key for $regularExpression document")
+		}
+		if sawRef && sawID {
+			break
+		}
+	}
+
+	// Write ref and id, in that order (skipping id type byte)
+	out = append(out, ref...)
+	out = append(out, id[1:]...)
+
+	// Inner doc must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outer doc must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {

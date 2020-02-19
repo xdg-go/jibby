@@ -78,6 +78,9 @@ var jsonRegularExpression = []byte{'$', 'r', 'e', 'g', 'u', 'l', 'a', 'r', 'E', 
 var jsonREpattern = []byte{'p', 'a', 't', 't', 'e', 'r', 'n'}
 var jsonREoptions = []byte{'o', 'p', 't', 'i', 'o', 'n', 's'}
 
+var jsonRef = []byte{'$', 'r', 'e', 'f'}
+var jsonID = []byte{'$', 'i', 'd'}
+
 var jsonBase64 = []byte{'b', 'a', 's', 'e', '6', '4'}
 var jsonSubType = []byte{'s', 'u', 'b', 'T', 'y', 'p', 'e'}
 

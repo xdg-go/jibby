@@ -140,6 +140,16 @@ func TestExtJSON(t *testing.T) {
 			output: "2c0000000361002400000002246f7074696f6e73000200000073000b2472656765780061626300696d000000",
 		},
 		{
+			label:  "$dbPointer",
+			output: "1A0000000C610002000000620056E1FC72E0C917E9C471416100",
+			input:  `{"a": {"$dbPointer": {"$ref": "b", "$id": {"$oid": "56e1fc72e0c917e9c4714161"}}}}`,
+		},
+		{
+			label:  "$dbPointer, keys reversed",
+			output: "1A0000000C610002000000620056E1FC72E0C917E9C471416100",
+			input:  `{"a": {"$dbPointer": {"$id": {"$oid": "56e1fc72e0c917e9c4714161"}, "$ref": "b"}}}`,
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",
