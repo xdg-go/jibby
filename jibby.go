@@ -80,6 +80,8 @@ func NewDecoder(json *bufio.Reader) (*Decoder, error) {
 }
 
 // ExtJSON toggles whether extended JSON is interpreted by the decoder.
+// See https://docs.mongodb.com/manual/reference/mongodb-extended-json/index.html
+// Jibby has limited support for the legacy extended JSON format.
 func (d *Decoder) ExtJSON(b bool) {
 	d.extJSONAllowed = b
 }

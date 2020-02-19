@@ -57,7 +57,16 @@ func ExampleDecoder_Decode() {
 
 # Extended JSON
 
-Extended JSON support is incomplete.
+Jibby optionally supports the [MongoDB Extended JSON
+v2](https://docs.mongodb.com/manual/reference/mongodb-extended-json/index.html)
+format.  There is limited support for the v1 format -- specifically, the
+`$type` and `$regex` keys use heuristics to determine whether these are
+extended JSON or MongoDB query operators.
+
+Escape sequences are not supported in Extended JSON keys or number formats,
+only in naturally textual fields like `$symbol`, `$code`, etc.  In practice,
+MongoDB Extended JSON generators should never output escape sequences in keys
+and number fields anyway.
 
 # Limitations
 
@@ -83,7 +92,29 @@ Go's numerical precision or with invalid/unsupported Unicode encoding.
 
 # Performance
 
-TBD
+Performance varies based on the shape of the input data.
+
+For a 92 MB mixed JSON dataset with some extended JSON:
+```
+           jibby 283.46 MB/s
+   jibby extjson 207.42 MB/s
+   driver bsonrw 43.77 MB/s
+naive json->bson 43.25 MB/s
+```
+
+For a 4.3 MB pure JSON dataset with lots of arrays:
+```
+           jibby 107.15 MB/s
+   jibby extjson 123.76 MB/s
+   driver bsonrw 25.68 MB/s
+naive json->bson 32.78 MB/s
+```
+
+The `jibby` and `jibby extjson` figures are jibby without and with extended
+JSON enabled, respectively.  The `driver bsonrw` figures use the MongoDB Go
+driver in a streaming mode with `bsonrw.NewExtJSONValueReader`.  The `naive
+json->bson` figures use Go's `encoding/json` to decode to
+`map[string]interface{}` and the Go driver's `bson.Marshal` function.
 
 # Copyright and License
 
