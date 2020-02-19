@@ -150,6 +150,16 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a": {"$dbPointer": {"$id": {"$oid": "56e1fc72e0c917e9c4714161"}, "$ref": "b"}}}`,
 		},
 		{
+			label:  "$date, numberLong",
+			output: "10000000096100000000000000000000",
+			input:  `{"a" : {"$date" : {"$numberLong" : "0"}}}`,
+		},
+		{
+			label:  "$date, ISO 8601",
+			output: "10000000096100000000000000000000",
+			input:  `{"a" : {"$date" : "1970-01-01T00:00:00Z"}}`,
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",

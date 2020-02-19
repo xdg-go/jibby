@@ -10,6 +10,7 @@ import (
 	"math"
 	"regexp"
 	"strconv"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -302,7 +303,59 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 }
 
 func (d *Decoder) convertDate(out []byte) ([]byte, error) {
-	return nil, nil
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	ch, err := d.readAfterWS()
+	if err != nil {
+		return nil, err
+	}
+	switch ch {
+	case '"':
+		// shortest ISO-8601 is `YYYY-MM-DDTHH:MM:SSZ` (20 chars); longest is
+		// `YYYY-MM-DDTHH:MM:SS.sss+HH:MM` (29 chars).  Plus we need the closing
+		// quote.  Peek a little further in case extra precision is given
+		// (counter to the spec)
+		buf, err := d.peekBoundedQuote(21, 48)
+		if err != nil {
+			return nil, err
+		}
+		epochMillis, err := parseISO8601toEpochMillis(buf)
+		if err != nil {
+			return nil, fmt.Errorf("parse error: %v", err)
+		}
+		d.json.Discard(len(buf) + 1)
+		var x [8]byte
+		xs := x[0:8]
+		binary.LittleEndian.PutUint64(xs, uint64(epochMillis))
+		out = append(out, xs...)
+	case '{':
+		err = d.readQuoteStart()
+		if err != nil {
+			return nil, err
+		}
+		err = d.readSpecificKey(jsonNumberLong)
+		if err != nil {
+			return nil, err
+		}
+		// readSpecificKey eats ':' but convertNumberLong wants it so unread it
+		d.json.UnreadByte()
+		out, err = d.convertNumberLong(out)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 // Starts after `"` of `"$type"` for key.  Need to distinguish between
@@ -1456,4 +1509,24 @@ func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+// Date conversion adapted from the MongoDB Go Driver: https://github.com/mongodb/mongo-go-driver
+// Licensed under the Apache 2 license.
+var timeFormats = []string{"2006-01-02T15:04:05.999Z07:00", "2006-01-02T15:04:05.999Z0700"}
+
+func parseISO8601toEpochMillis(data []byte) (int64, error) {
+	var t time.Time
+	var err error
+	for _, format := range timeFormats {
+		t, err = time.Parse(format, string(data))
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return 0, fmt.Errorf("invalid $date value string: %s", string(data))
+	}
+
+	return t.Unix()*1e3 + int64(t.Nanosecond())/1e6, nil
 }
