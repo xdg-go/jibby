@@ -26,12 +26,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	benchJibby(jsonData)
+	benchJibby(jsonData, false)
+	benchJibby(jsonData, true)
 	benchMongoDriverRW(jsonData)
 	benchNaive(jsonData)
 }
 
-func benchJibby(input []byte) {
+func benchJibby(input []byte, extJSON bool) {
 	bson := make([]byte, 0, 256)
 
 	jsonReader := bufio.NewReader(bytes.NewReader(input))
@@ -39,6 +40,7 @@ func benchJibby(input []byte) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	jib.ExtJSON(extJSON)
 
 	start := time.Now()
 	for {
@@ -52,7 +54,11 @@ func benchJibby(input []byte) {
 		}
 	}
 	elapsed := time.Since(start)
-	reportResult("jibby", len(input), elapsed)
+	label := "jibby"
+	if extJSON {
+		label = label + " extjson"
+	}
+	reportResult(label, len(input), elapsed)
 }
 
 func benchMongoDriverRW(input []byte) {
@@ -138,5 +144,5 @@ func benchNaive(input []byte) {
 
 func reportResult(label string, size int, elapsed time.Duration) {
 	throughput := float64(size) / float64(elapsed.Microseconds())
-	fmt.Printf("%15s %.2f MB/s\n", label, throughput)
+	fmt.Printf("%16s %.2f MB/s\n", label, throughput)
 }
