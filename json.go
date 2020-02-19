@@ -95,8 +95,9 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
-		// If ExtJSON enabled and found, delegate value writing to it.  If it
-		// doesn't return a byte buffer, the value wasn't extended JSON.
+		// If ExtJSON enabled and found on this first key, delegate value
+		// writing to it.  If it doesn't return a byte buffer, the value wasn't
+		// extended JSON.
 		if d.extJSONAllowed {
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
@@ -153,21 +154,6 @@ LOOP:
 			if ch != '"' {
 				return nil, d.parseError(ch, "expecting key")
 			}
-
-			// If ExtJSON enabled and found, delegate value writing to it.  If it
-			// doesn't return a byte buffer, the value wasn't extended JSON.
-			if d.extJSONAllowed {
-				buf, err := d.handleExtJSON(out, outerTypeBytePos)
-				if err != nil {
-					return nil, err
-				}
-				if buf != nil {
-					return buf, nil
-				}
-			}
-
-			// Not extended JSON, so now write the document type byte.
-			overwriteTypeByte(out, outerTypeBytePos, bsonDocument)
 
 			// Record position for the placeholder type byte that we write
 			typeBytePos = len(out)

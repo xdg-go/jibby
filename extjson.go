@@ -309,8 +309,8 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 // Extended JSON $type or MongoDB $type query operator.
 // If we can peek far enough, we can check with regular expresssions.
 
-var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s+:\s+"\d\d?"`)
-var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s+:\s+(\d+|"\w+"|\{)`)
+var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s*:\s*"\d\d?"`)
+var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s*:\s*(\d+|"\w+"|\{)`)
 
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -397,13 +397,11 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	binLength := len(out) - lengthPos - 5
 	overwriteLength(out, lengthPos, binLength)
 
-	// Must end with document terminator, but unread it to be checked
-	// at higher level
+	// Must end with document terminator
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
 	}
-	d.json.UnreadByte()
 
 	return out, nil
 }
@@ -484,8 +482,93 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"`)
+var dollarRegexQueryOpRe = regexp.MustCompile(`^\$regex"\s*:\s*\{`)
+
 func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
-	return nil, nil
+	// Peek ahead successively longer; shouldn't be necessary but
+	// covers a pathological case with excessive white space
+	peekDistance := 64
+	var isExtJSON bool
+	var err error
+	var buf []byte
+	for peekDistance < d.json.Size() {
+		buf, err = d.json.Peek(peekDistance)
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+		}
+		// Smallest possible matching buffer is 9 chars: `$regex":{`
+		if len(buf) < 9 {
+			return nil, newReadError(io.ErrUnexpectedEOF)
+		}
+		if dollarRegexExtJSONRe.Match(buf) {
+			isExtJSON = true
+			break
+		} else if dollarRegexQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		}
+		if len(buf) < peekDistance {
+			break
+		}
+		peekDistance *= 2
+	}
+	if !isExtJSON {
+		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
+	}
+
+	overwriteTypeByte(out, typeBytePos, bsonRegex)
+
+	// Discard $regex key and closing quote
+	d.json.Discard(7)
+	// Read name separator and opening quote
+	err = d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+
+	// Read regex pattern
+	out, err = d.convertCString(out)
+	if err != nil {
+		return nil, err
+	}
+
+	// $options key must be next
+	err = d.readCharAfterWS(',')
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readSpecificKey(jsonOptions)
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	// Read options string
+	out, err = d.convertCString(out)
+	if err != nil {
+		return nil, err
+	}
+
+	// Must end with document terminator.
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 func (d *Decoder) convertBinary(out []byte) ([]byte, error) {
@@ -667,14 +750,6 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	binLength := len(out) - lengthPos - 5
 	overwriteLength(out, lengthPos, binLength)
 
-	// Must end with document terminator, but unread it to be checked
-	// at higher level
-	err = d.readObjectTerminator()
-	if err != nil {
-		return nil, err
-	}
-	d.json.UnreadByte()
-
 	return out, nil
 }
 
@@ -722,8 +797,94 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*"`)
+var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*\{`)
+
 func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
-	return nil, nil
+	// Peek ahead successively longer; shouldn't be necessary but
+	// covers a pathological case with excessive white space
+	peekDistance := 64
+	var isExtJSON bool
+	var err error
+	var buf []byte
+	for peekDistance < d.json.Size() {
+		buf, err = d.json.Peek(peekDistance)
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+		}
+		// Smallest possible matching buffer is 23 chars: `$options":"","$regex":{`
+		if len(buf) < 23 {
+			return nil, newReadError(io.ErrUnexpectedEOF)
+		}
+		if dollarOptionsExtJSONRe.Match(buf) {
+			isExtJSON = true
+			break
+		} else if dollarOptionsQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		}
+		if len(buf) < peekDistance {
+			break
+		}
+		peekDistance *= 2
+	}
+	if !isExtJSON {
+		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
+	}
+
+	overwriteTypeByte(out, typeBytePos, bsonRegex)
+
+	// Discard $options key and closing quote
+	d.json.Discard(9)
+	// Read name separator and opening quote
+	err = d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	// Read options string
+	opts := make([]byte, 0, 8)
+	opts, err = d.convertCString(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// $regex key must be next
+	err = d.readCharAfterWS(',')
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	err = d.readSpecificKey(jsonRegex)
+	if err != nil {
+		return nil, err
+	}
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+	out, err = d.convertCString(out)
+	if err != nil {
+		return nil, err
+	}
+	// Append options
+	out = append(out, opts...)
+
+	// Must end with document terminator.
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
@@ -1124,7 +1285,13 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 	out = append(out, pattern...)
 	out = append(out, options...)
 
-	// Must end with document terminator
+	// Inner doc must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outer doc must end with document terminator
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
