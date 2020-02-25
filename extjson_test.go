@@ -1,6 +1,16 @@
 package jibby
 
-import "testing"
+import (
+	"bufio"
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestExtJSON(t *testing.T) {
 	cases := []unmarshalTestCase{
@@ -177,4 +187,141 @@ func TestExtJSON(t *testing.T) {
 	}
 
 	testWithUnmarshal(t, cases, true)
+}
+
+// Rest of this file tests using the MongoDB BSON Corpus:
+// https://github.com/mongodb/specifications/tree/master/source/bson-corpus
+// Licensed under Creative Commons by-nc-sa
+
+const dataDir = "testdata/mongodb-corpus/tests"
+
+type validCorpusCase struct {
+	Description       string `json:"description"`
+	CanonicalBSON     string `json:"canonical_bson"`
+	CanonicalExtJSON  string `json:"canonical_extjson"`
+	RelaxedExtJSON    string `json:"relaxed_extjson"`
+	DegenerateBSON    string `json:"degenerate_bson"`
+	DegenerateExtJSON string `json:"degenerate_extjson"`
+	Lossy             bool   `json:"lossy"`
+}
+
+type parseErrorCorpusCase struct {
+	Description string `json:"description"`
+	Input       string `json:"string"`
+}
+
+type corpusFile struct {
+	Description string                 `json:"description"`
+	TestKey     string                 `json:"test_key"`
+	Valid       []validCorpusCase      `json:"valid"`
+	ParseErrors []parseErrorCorpusCase `json:"parseErrors"`
+}
+
+func TestBSONCorpus(t *testing.T) {
+	t.Parallel()
+
+	files, err := ioutil.ReadDir(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".json") {
+			continue
+		}
+		data, err := ioutil.ReadFile(filepath.Join(dataDir, f.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var testCase corpusFile
+		err = json.Unmarshal(data, &testCase)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(f.Name(), func(t *testing.T) {
+			if testCase.Valid != nil {
+				testValidCorpusCases(t, testCase.Valid)
+			}
+			if testCase.ParseErrors != nil {
+				testParseErrorCorpusCases(t, testCase.ParseErrors)
+			}
+		})
+	}
+}
+
+func testValidCorpusCases(t *testing.T, cases []validCorpusCase) {
+	t.Run("valid", func(t *testing.T) {
+		for _, c := range cases {
+			t.Run(c.Description, func(t *testing.T) {
+				t.Parallel()
+
+				if c.CanonicalExtJSON != "" && !c.Lossy {
+					compareCorpusUnmarshal(t, c.CanonicalExtJSON, c.CanonicalBSON)
+				}
+				if c.DegenerateExtJSON != "" && !c.Lossy {
+					compareCorpusUnmarshal(t, c.DegenerateExtJSON, c.CanonicalBSON)
+				}
+				if c.RelaxedExtJSON != "" {
+					fromJibby, err := convertWithJibby([]byte(c.RelaxedExtJSON))
+					if err != nil {
+						t.Fatalf("jibby decoding: %v", err)
+					}
+					fromMongoDriver, err := convertWithGoDriver([]byte(c.RelaxedExtJSON))
+					if err != nil {
+						t.Fatalf("MongoDB driver decoding: %v", err)
+					}
+					if bytes.Compare(fromJibby, fromMongoDriver) != 0 {
+						t.Fatalf("Unmarshal doesn't match expected:\nGot:    %v\nExpect: %v", hex.EncodeToString(fromJibby), hex.EncodeToString(fromMongoDriver))
+					}
+				}
+			})
+		}
+	})
+}
+
+func compareCorpusUnmarshal(t *testing.T, input string, output string) {
+	expect, err := hex.DecodeString(output)
+	if err != nil {
+		t.Fatalf("error decoding test output: %v", err)
+	}
+	out := make([]byte, 0, 256)
+	jsonReader := bufio.NewReader(bytes.NewReader([]byte(input)))
+	jib, err := NewDecoder(jsonReader)
+	jib.ExtJSON(true)
+	if err != nil && err != io.EOF {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out, err = jib.Decode(out)
+	if err != nil {
+		t.Errorf("Decoding: %v", err)
+	}
+
+	// We expect only one document: check for EOF
+	buf := make([]byte, 0, 0)
+	buf, err = jib.Decode(buf)
+	if err != io.EOF {
+		t.Errorf("Expected io.EOF but got: %v", err)
+	}
+
+	if bytes.Compare(out, expect) != 0 {
+		t.Fatalf("Unmarshal doesn't match expected:\nGot:    %v\nExpect: %v", hex.EncodeToString(out), output)
+	}
+}
+
+func testParseErrorCorpusCases(t *testing.T, cases []parseErrorCorpusCase) {
+	t.Run("parse errors", func(t *testing.T) {
+		for _, c := range cases {
+			t.Run(c.Description, func(t *testing.T) {
+				t.Parallel()
+				_, err := convertWithJibby([]byte(c.Input))
+				if err == nil {
+					t.Fatalf("Expected error but got nil")
+				}
+				if !strings.Contains(err.Error(), "parse error") {
+					t.Fatalf("Error didn't contain 'parse error': %v", err)
+				}
+			})
+		}
+	})
 }

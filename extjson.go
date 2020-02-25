@@ -295,6 +295,12 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 		// BSON code w/scope length is total length including length bytes
 		cwsLength := len(out) - lengthPos
 		overwriteLength(out, lengthPos, cwsLength)
+
+		// Must end with document terminator
+		err = d.readObjectTerminator()
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, d.parseError(ch, "expected value separator or end of object")
 	}
@@ -1177,7 +1183,13 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 	binary.LittleEndian.PutUint32(xs, timestamp)
 	out = append(out, xs...)
 
-	// Must end with document terminator
+	// Inner doc must end with document terminator
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outer doc must end with document terminator
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err

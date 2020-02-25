@@ -30,7 +30,6 @@ func testWithUnmarshal(t *testing.T, cases []unmarshalTestCase, extJSON bool) {
 			buf := make([]byte, 0, 256)
 			if extJSON {
 				buf, err = UnmarshalExtJSON([]byte(c.input), buf)
-
 			} else {
 				buf, err = Unmarshal([]byte(c.input), buf)
 			}
@@ -89,6 +88,7 @@ func getTestFiles(t *testing.T, dir, prefix, suffix string) []string {
 func convertWithJibby(input []byte) ([]byte, error) {
 	jsonReader := bufio.NewReader(bytes.NewReader(input))
 	jib, err := NewDecoder(jsonReader)
+	jib.ExtJSON(true)
 	if err != nil {
 		return nil, err
 	}
