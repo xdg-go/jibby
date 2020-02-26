@@ -82,7 +82,9 @@ and number fields anyway.
 Jibby is extensively tested.
 
 Jibby's JSON-to-BSON output is compared against reference output from the
-[MongoDB Go driver](https://pkg.go.dev/go.mongodb.org/mongo-driver).
+[MongoDB Go driver](https://pkg.go.dev/go.mongodb.org/mongo-driver).  Extended
+JSON conversion is tested against the [MongoDB BSON
+Corpus](https://github.com/mongodb/specifications/tree/master/source/bson-corpus).
 
 JSON parsing support is tested against data sets from Nicholas Seriot's
 [Parsing JSON is a Minefield](http://seriot.ch/parsing_json.php) article.  It
