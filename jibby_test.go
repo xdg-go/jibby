@@ -331,7 +331,7 @@ func TestDepthLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	jib.MaxDepth(5)
-	out, err = jib.Decode(out)
+	_, err = jib.Decode(out)
 	if err != nil {
 		t.Fatalf("expected no error and got: %v", err)
 	}

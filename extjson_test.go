@@ -298,8 +298,8 @@ func compareCorpusUnmarshal(t *testing.T, input string, output string) {
 	}
 
 	// We expect only one document: check for EOF
-	buf := make([]byte, 0, 0)
-	buf, err = jib.Decode(buf)
+	buf := make([]byte, 0)
+	_, err = jib.Decode(buf)
 	if err != io.EOF {
 		t.Errorf("Expected io.EOF but got: %v", err)
 	}

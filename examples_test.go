@@ -16,6 +16,9 @@ func ExampleUnmarshal() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Do something with bson
+	_ = bson
 }
 
 func ExampleDecoder_Decode() {
@@ -32,4 +35,7 @@ func ExampleDecoder_Decode() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Do something with bson
+	_ = bson
 }
