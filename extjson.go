@@ -66,110 +66,110 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 
 	switch len(key) {
 	case 4: // $oid
-		if bytes.Compare(key, jsonOID) == 0 {
+		if bytes.Equal(key, jsonOID) {
 			overwriteTypeByte(out, typeBytePos, bsonObjectID)
 			d.json.Discard(5)
 			return d.convertOID(out)
 		}
 		return nil, nil
 	case 5: // $code $date $type
-		if bytes.Compare(key, jsonCode) == 0 {
+		if bytes.Equal(key, jsonCode) {
 			// Still don't know if this is code or code w/scope, so can't
 			// assign type yet.
 			d.json.Discard(6)
 			return d.convertCode(out, typeBytePos)
-		} else if bytes.Compare(key, jsonDate) == 0 {
+		} else if bytes.Equal(key, jsonDate) {
 			overwriteTypeByte(out, typeBytePos, bsonDateTime)
 			d.json.Discard(6)
 			return d.convertDate(out)
-		} else if bytes.Compare(key, jsonType) == 0 {
+		} else if bytes.Equal(key, jsonType) {
 			// Still don't know if this is binary or a $type query operator, so
 			// can't assign type *or* discard anything yet.
 			return d.convertType(out, typeBytePos)
 		}
 		return nil, nil
 	case 6: // $scope $regex
-		if bytes.Compare(key, jsonScope) == 0 {
+		if bytes.Equal(key, jsonScope) {
 			overwriteTypeByte(out, typeBytePos, bsonCodeWithScope)
 			d.json.Discard(7)
 			return d.convertScope(out)
-		} else if bytes.Compare(key, jsonRegex) == 0 {
+		} else if bytes.Equal(key, jsonRegex) {
 			// Still don't know if this is legacy $regex or a $regex query
 			// operator so can't assign type or discard yet.
 			return d.convertRegex(out, typeBytePos)
 		}
 		return nil, nil
 	case 7: // $binary $maxKey $minKey $symbol
-		if bytes.Compare(key, jsonBinary) == 0 {
+		if bytes.Equal(key, jsonBinary) {
 			overwriteTypeByte(out, typeBytePos, bsonBinary)
 			d.json.Discard(8)
 			return d.convertBinary(out)
-		} else if bytes.Compare(key, jsonMaxKey) == 0 {
+		} else if bytes.Equal(key, jsonMaxKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMaxKey)
 			d.json.Discard(8)
 			return d.convertMinMaxKey(out)
-		} else if bytes.Compare(key, jsonMinKey) == 0 {
+		} else if bytes.Equal(key, jsonMinKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMinKey)
 			d.json.Discard(8)
 			return d.convertMinMaxKey(out)
-		} else if bytes.Compare(key, jsonSymbol) == 0 {
+		} else if bytes.Equal(key, jsonSymbol) {
 			overwriteTypeByte(out, typeBytePos, bsonSymbol)
 			d.json.Discard(8)
 			return d.convertSymbol(out)
 		}
 		return nil, nil
 	case 8: // $options
-		if bytes.Compare(key, jsonOptions) == 0 {
+		if bytes.Equal(key, jsonOptions) {
 			// Still don't know if this is legacy $regex or non-extJSON
 			// so can't assign type or discard yet.
 			return d.convertOptions(out, typeBytePos)
 		}
 		return nil, nil
 	case 10: // $dbPointer $numberInt $timestamp $undefined
-		if bytes.Compare(key, jsonDbPointer) == 0 {
+		if bytes.Equal(key, jsonDbPointer) {
 			overwriteTypeByte(out, typeBytePos, bsonDBPointer)
 			d.json.Discard(11)
 			return d.convertDBPointer(out)
 		}
-		if bytes.Compare(key, jsonNumberInt) == 0 {
+		if bytes.Equal(key, jsonNumberInt) {
 			overwriteTypeByte(out, typeBytePos, bsonInt32)
 			d.json.Discard(11)
 			return d.convertNumberInt(out)
 		}
-		if bytes.Compare(key, jsonTimestamp) == 0 {
+		if bytes.Equal(key, jsonTimestamp) {
 			overwriteTypeByte(out, typeBytePos, bsonTimestamp)
 			d.json.Discard(11)
 			return d.convertTimestamp(out)
 		}
-		if bytes.Compare(key, jsonUndefined) == 0 {
+		if bytes.Equal(key, jsonUndefined) {
 			overwriteTypeByte(out, typeBytePos, bsonUndefined)
 			d.json.Discard(11)
 			return d.convertUndefined(out)
 		}
 		return nil, nil
 	case 11: // $numberLong
-		if bytes.Compare(key, jsonNumberLong) == 0 {
+		if bytes.Equal(key, jsonNumberLong) {
 			overwriteTypeByte(out, typeBytePos, bsonInt64)
 			d.json.Discard(12)
 			return d.convertNumberLong(out)
 		}
 		return nil, nil
 	case 13: // $numberDouble
-		if bytes.Compare(key, jsonNumberDouble) == 0 {
+		if bytes.Equal(key, jsonNumberDouble) {
 			overwriteTypeByte(out, typeBytePos, bsonDouble)
 			d.json.Discard(14)
 			return d.convertNumberDouble(out)
 		}
 		return nil, nil
 	case 14: // $numberDecimal
-		if bytes.Compare(key, jsonNumberDecimal) == 0 {
+		if bytes.Equal(key, jsonNumberDecimal) {
 			overwriteTypeByte(out, typeBytePos, bsonDecimal128)
 			d.json.Discard(15)
 			return d.convertNumberDecimal(out)
 		}
 		return nil, nil
 	case 18: // $regularExpression
-		if bytes.Compare(key, jsonRegularExpression) == 0 {
+		if bytes.Equal(key, jsonRegularExpression) {
 			overwriteTypeByte(out, typeBytePos, bsonRegex)
 			d.json.Discard(19)
 			return d.convertRegularExpression(out)
@@ -690,7 +690,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			return nil, err
 		}
 		switch {
-		case bytes.Compare(key, jsonSubType) == 0:
+		case bytes.Equal(key, jsonSubType):
 			if sawSubType {
 				return nil, d.parseError(key[0], "subType repeated")
 			}
@@ -714,7 +714,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 					return nil, err
 				}
 			}
-		case bytes.Compare(key, jsonBase64) == 0:
+		case bytes.Equal(key, jsonBase64):
 			if sawBase64 {
 				return nil, d.parseError(key[0], "base64 repeated")
 			}
@@ -787,8 +787,8 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if bytes.Compare(key, jsonType) != 0 {
-		d.parseError(key[0], "expected $type")
+	if !bytes.Equal(key, jsonType) {
+		return nil, d.parseError(key[0], "expected $type")
 	}
 	d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
@@ -977,7 +977,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 
 		// Handle the key.
 		switch {
-		case bytes.Compare(key, jsonRef) == 0:
+		case bytes.Equal(key, jsonRef):
 			if sawRef {
 				return nil, d.parseError(key[0], "key '$ref' repeated")
 			}
@@ -1004,7 +1004,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 					return nil, err
 				}
 			}
-		case bytes.Compare(key, jsonID) == 0:
+		case bytes.Equal(key, jsonID):
 			if sawID {
 				return nil, d.parseError(key[0], "key '$id' repeated")
 			}
@@ -1214,7 +1214,7 @@ func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, newReadError(err)
 	}
-	if bytes.Compare(buf, []byte{'r', 'u', 'e'}) != 0 {
+	if !bytes.Equal(buf, []byte{'r', 'u', 'e'}) {
 		return nil, d.parseError('t', "expected 'true'")
 	}
 
@@ -1383,7 +1383,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 
 		// Handle the key.
 		switch {
-		case bytes.Compare(key, jsonREpattern) == 0:
+		case bytes.Equal(key, jsonREpattern):
 			if sawPattern {
 				return nil, d.parseError(key[0], "key 'pattern' repeated")
 			}
@@ -1414,7 +1414,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 					return nil, err
 				}
 			}
-		case bytes.Compare(key, jsonREoptions) == 0:
+		case bytes.Equal(key, jsonREoptions):
 			if sawOptions {
 				return nil, d.parseError(key[0], "key 'options' repeated")
 			}

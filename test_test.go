@@ -50,7 +50,7 @@ func testWithUnmarshal(t *testing.T, cases []unmarshalTestCase, extJSON bool) {
 					if err != nil {
 						t.Fatalf("error decoding test output: %v", err)
 					}
-					if bytes.Compare(expect, buf) != 0 {
+					if !bytes.Equal(expect, buf) {
 						t.Fatalf("Unmarshal doesn't match expected:\nGot:    %v\nExpect: %v", hex.EncodeToString(buf), c.output)
 					}
 
@@ -125,19 +125,19 @@ func bomLength(input []byte) int {
 	if len(input) < 2 {
 		return 0
 	}
-	if bytes.Compare(input[0:2], utf16BEBOM) == 0 || bytes.Compare(input[0:2], utf16LEBOM) == 0 {
+	if bytes.Equal(input[0:2], utf16BEBOM) || bytes.Equal(input[0:2], utf16LEBOM) {
 		return 2
 	}
 	if len(input) < 3 {
 		return 0
 	}
-	if bytes.Compare(input[0:3], utf8BOM) == 0 {
+	if bytes.Equal(input[0:3], utf8BOM) {
 		return 3
 	}
 	if len(input) < 4 {
 		return 0
 	}
-	if bytes.Compare(input[0:4], utf32BEBOM) == 0 || bytes.Compare(input[0:4], utf32LEBOM) == 0 {
+	if bytes.Equal(input[0:4], utf32BEBOM) || bytes.Equal(input[0:4], utf32LEBOM) {
 		return 4
 	}
 	return 0

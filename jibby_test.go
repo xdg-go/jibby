@@ -98,7 +98,7 @@ func testPassingConversion(t *testing.T, f string, allowedErrStrings []string) {
 		t.Logf("skipping, mongo go driver error: %v\ntext: %s", err, string(text))
 		return
 	}
-	if bytes.Compare(jibbyGot, driverGot) != 0 {
+	if !bytes.Equal(jibbyGot, driverGot) {
 		t.Fatalf("jibby doesn't match Go driver:\njibby:  %v\nDriver: %v", hex.EncodeToString(jibbyGot), hex.EncodeToString(driverGot))
 	}
 }

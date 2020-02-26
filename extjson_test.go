@@ -270,7 +270,7 @@ func testValidCorpusCases(t *testing.T, cases []validCorpusCase) {
 					if err != nil {
 						t.Fatalf("MongoDB driver decoding: %v", err)
 					}
-					if bytes.Compare(fromJibby, fromMongoDriver) != 0 {
+					if !bytes.Equal(fromJibby, fromMongoDriver) {
 						t.Fatalf("Unmarshal doesn't match expected:\nGot:    %v\nExpect: %v", hex.EncodeToString(fromJibby), hex.EncodeToString(fromMongoDriver))
 					}
 				}
@@ -304,7 +304,7 @@ func compareCorpusUnmarshal(t *testing.T, input string, output string) {
 		t.Errorf("Expected io.EOF but got: %v", err)
 	}
 
-	if bytes.Compare(out, expect) != 0 {
+	if !bytes.Equal(out, expect) {
 		t.Fatalf("Unmarshal doesn't match expected:\nGot:    %v\nExpect: %v", hex.EncodeToString(out), output)
 	}
 }

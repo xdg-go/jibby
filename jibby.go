@@ -233,7 +233,7 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 	if err != nil {
 		return err
 	}
-	if bytes.Compare(key, expected) != 0 {
+	if !bytes.Equal(key, expected) {
 		d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
 	}
 	d.json.Discard(len(key) + 1)
@@ -396,7 +396,7 @@ func handleBOM(r *bufio.Reader) error {
 	if err != nil {
 		return nil
 	}
-	if bytes.Compare(preamble, utf16BEBOM) == 0 || bytes.Compare(preamble, utf16LEBOM) == 0 {
+	if bytes.Equal(preamble, utf16BEBOM) || bytes.Equal(preamble, utf16LEBOM) {
 		return fmt.Errorf("error: detected unsupported UTF-16 BOM")
 	}
 
@@ -405,7 +405,7 @@ func handleBOM(r *bufio.Reader) error {
 	if err != nil {
 		return nil
 	}
-	if bytes.Compare(preamble, utf8BOM) == 0 {
+	if bytes.Equal(preamble, utf8BOM) {
 		_, _ = r.Discard(3)
 	}
 
@@ -414,7 +414,7 @@ func handleBOM(r *bufio.Reader) error {
 	if err != nil {
 		return nil
 	}
-	if bytes.Compare(preamble, utf32BEBOM) == 0 || bytes.Compare(preamble, utf32LEBOM) == 0 {
+	if bytes.Equal(preamble, utf32BEBOM) || bytes.Equal(preamble, utf32LEBOM) {
 		return fmt.Errorf("error: detected unsupported UTF-32 BOM")
 	}
 
