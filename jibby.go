@@ -234,7 +234,7 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 		return err
 	}
 	if !bytes.Equal(key, expected) {
-		d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
+		return d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
 	}
 	d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
