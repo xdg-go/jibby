@@ -70,10 +70,7 @@ func NewDecoder(json *bufio.Reader) (*Decoder, error) {
 	case '[':
 		d.arrayStarted = true
 	default:
-		err = d.json.UnreadByte()
-		if err != nil {
-			return nil, err
-		}
+		_ = d.json.UnreadByte()
 	}
 
 	return d, err
@@ -113,10 +110,7 @@ func (d *Decoder) Decode(buf []byte) ([]byte, error) {
 
 	switch ch {
 	case '{':
-		err = d.json.UnreadByte()
-		if err != nil {
-			return nil, err
-		}
+		_ = d.json.UnreadByte()
 	case ']':
 		if d.arrayStarted {
 			d.arrayFinished = true
@@ -177,7 +171,7 @@ func (d *Decoder) skipWS() error {
 	if err != nil {
 		return err
 	}
-	d.json.UnreadByte()
+	_ = d.json.UnreadByte()
 	return nil
 }
 
@@ -236,7 +230,7 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 	if !bytes.Equal(key, expected) {
 		return d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
 	}
-	d.json.Discard(len(key) + 1)
+	_, _ = d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
 	if err != nil {
 		return err
@@ -322,7 +316,7 @@ func (d *Decoder) readUInt32() (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("parser error: uint conversion: %v", err)
 	}
-	d.json.Discard(len(buf))
+	_, _ = d.json.Discard(len(buf))
 	return uint32(n), nil
 }
 

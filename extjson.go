@@ -68,7 +68,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 4: // $oid
 		if bytes.Equal(key, jsonOID) {
 			overwriteTypeByte(out, typeBytePos, bsonObjectID)
-			d.json.Discard(5)
+			_, _ = d.json.Discard(5)
 			return d.convertOID(out)
 		}
 		return nil, nil
@@ -76,11 +76,11 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 		if bytes.Equal(key, jsonCode) {
 			// Still don't know if this is code or code w/scope, so can't
 			// assign type yet.
-			d.json.Discard(6)
+			_, _ = d.json.Discard(6)
 			return d.convertCode(out, typeBytePos)
 		} else if bytes.Equal(key, jsonDate) {
 			overwriteTypeByte(out, typeBytePos, bsonDateTime)
-			d.json.Discard(6)
+			_, _ = d.json.Discard(6)
 			return d.convertDate(out)
 		} else if bytes.Equal(key, jsonType) {
 			// Still don't know if this is binary or a $type query operator, so
@@ -91,7 +91,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 6: // $scope $regex
 		if bytes.Equal(key, jsonScope) {
 			overwriteTypeByte(out, typeBytePos, bsonCodeWithScope)
-			d.json.Discard(7)
+			_, _ = d.json.Discard(7)
 			return d.convertScope(out)
 		} else if bytes.Equal(key, jsonRegex) {
 			// Still don't know if this is legacy $regex or a $regex query
@@ -102,19 +102,19 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 7: // $binary $maxKey $minKey $symbol
 		if bytes.Equal(key, jsonBinary) {
 			overwriteTypeByte(out, typeBytePos, bsonBinary)
-			d.json.Discard(8)
+			_, _ = d.json.Discard(8)
 			return d.convertBinary(out)
 		} else if bytes.Equal(key, jsonMaxKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMaxKey)
-			d.json.Discard(8)
+			_, _ = d.json.Discard(8)
 			return d.convertMinMaxKey(out)
 		} else if bytes.Equal(key, jsonMinKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMinKey)
-			d.json.Discard(8)
+			_, _ = d.json.Discard(8)
 			return d.convertMinMaxKey(out)
 		} else if bytes.Equal(key, jsonSymbol) {
 			overwriteTypeByte(out, typeBytePos, bsonSymbol)
-			d.json.Discard(8)
+			_, _ = d.json.Discard(8)
 			return d.convertSymbol(out)
 		}
 		return nil, nil
@@ -128,50 +128,50 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 10: // $dbPointer $numberInt $timestamp $undefined
 		if bytes.Equal(key, jsonDbPointer) {
 			overwriteTypeByte(out, typeBytePos, bsonDBPointer)
-			d.json.Discard(11)
+			_, _ = d.json.Discard(11)
 			return d.convertDBPointer(out)
 		}
 		if bytes.Equal(key, jsonNumberInt) {
 			overwriteTypeByte(out, typeBytePos, bsonInt32)
-			d.json.Discard(11)
+			_, _ = d.json.Discard(11)
 			return d.convertNumberInt(out)
 		}
 		if bytes.Equal(key, jsonTimestamp) {
 			overwriteTypeByte(out, typeBytePos, bsonTimestamp)
-			d.json.Discard(11)
+			_, _ = d.json.Discard(11)
 			return d.convertTimestamp(out)
 		}
 		if bytes.Equal(key, jsonUndefined) {
 			overwriteTypeByte(out, typeBytePos, bsonUndefined)
-			d.json.Discard(11)
+			_, _ = d.json.Discard(11)
 			return d.convertUndefined(out)
 		}
 		return nil, nil
 	case 11: // $numberLong
 		if bytes.Equal(key, jsonNumberLong) {
 			overwriteTypeByte(out, typeBytePos, bsonInt64)
-			d.json.Discard(12)
+			_, _ = d.json.Discard(12)
 			return d.convertNumberLong(out)
 		}
 		return nil, nil
 	case 13: // $numberDouble
 		if bytes.Equal(key, jsonNumberDouble) {
 			overwriteTypeByte(out, typeBytePos, bsonDouble)
-			d.json.Discard(14)
+			_, _ = d.json.Discard(14)
 			return d.convertNumberDouble(out)
 		}
 		return nil, nil
 	case 14: // $numberDecimal
 		if bytes.Equal(key, jsonNumberDecimal) {
 			overwriteTypeByte(out, typeBytePos, bsonDecimal128)
-			d.json.Discard(15)
+			_, _ = d.json.Discard(15)
 			return d.convertNumberDecimal(out)
 		}
 		return nil, nil
 	case 18: // $regularExpression
 		if bytes.Equal(key, jsonRegularExpression) {
 			overwriteTypeByte(out, typeBytePos, bsonRegex)
-			d.json.Discard(19)
+			_, _ = d.json.Discard(19)
 			return d.convertRegularExpression(out)
 		}
 		return nil, nil
@@ -213,7 +213,7 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	out = append(out, xs...)
 
 	// look for object close
-	d.json.Discard(25)
+	_, _ = d.json.Discard(25)
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -333,7 +333,7 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse error: %v", err)
 		}
-		d.json.Discard(len(buf) + 1)
+		_, _ = d.json.Discard(len(buf) + 1)
 		var x [8]byte
 		xs := x[0:8]
 		binary.LittleEndian.PutUint64(xs, uint64(epochMillis))
@@ -348,7 +348,7 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 			return nil, err
 		}
 		// readSpecificKey eats ':' but convertNumberLong wants it so unread it
-		d.json.UnreadByte()
+		_ = d.json.UnreadByte()
 		out, err = d.convertNumberLong(out)
 		if err != nil {
 			return nil, err
@@ -413,7 +413,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	out = append(out, emptyType)
 
 	// Discard $type key and closing quote
-	d.json.Discard(6)
+	_, _ = d.json.Discard(6)
 	// Read name separator and opening quote
 	err = d.readNameSeparator()
 	if err != nil {
@@ -482,7 +482,7 @@ func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, 
 		return nil, d.parseError(subTypeBytes[0], fmt.Sprintf("error parsing subtype: %v", err))
 	}
 	overwriteTypeByte(out, subTypeBytePos, xs[0])
-	d.json.Discard(len(subTypeBytes) + 1)
+	_, _ = d.json.Discard(len(subTypeBytes) + 1)
 
 	return out, nil
 }
@@ -581,7 +581,7 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 	overwriteTypeByte(out, typeBytePos, bsonRegex)
 
 	// Discard $regex key and closing quote
-	d.json.Discard(7)
+	_, _ = d.json.Discard(7)
 	// Read name separator and opening quote
 	err = d.readNameSeparator()
 	if err != nil {
@@ -695,7 +695,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "subType repeated")
 			}
 			sawSubType = true
-			d.json.Discard(len(key) + 1)
+			_, _ = d.json.Discard(len(key) + 1)
 			err = d.readNameSeparator()
 			if err != nil {
 				return nil, err
@@ -719,7 +719,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "base64 repeated")
 			}
 			sawBase64 = true
-			d.json.Discard(len(key) + 1)
+			_, _ = d.json.Discard(len(key) + 1)
 			err = d.readNameSeparator()
 			if err != nil {
 				return nil, err
@@ -790,7 +790,7 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	if !bytes.Equal(key, jsonType) {
 		return nil, d.parseError(key[0], "expected $type")
 	}
-	d.json.Discard(len(key) + 1)
+	_, _ = d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
 	if err != nil {
 		return nil, err
@@ -896,7 +896,7 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	overwriteTypeByte(out, typeBytePos, bsonRegex)
 
 	// Discard $options key and closing quote
-	d.json.Discard(9)
+	_, _ = d.json.Discard(9)
 	// Read name separator and opening quote
 	err = d.readNameSeparator()
 	if err != nil {
@@ -982,7 +982,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "key '$ref' repeated")
 			}
 			sawRef = true
-			d.json.Discard(len(key) + 1)
+			_, _ = d.json.Discard(len(key) + 1)
 			err = d.readNameSeparator()
 			if err != nil {
 				return nil, err
@@ -1009,7 +1009,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "key '$id' repeated")
 			}
 			sawID = true
-			d.json.Discard(len(key) + 1)
+			_, _ = d.json.Discard(len(key) + 1)
 			err = d.readNameSeparator()
 			if err != nil {
 				return nil, err
@@ -1085,7 +1085,7 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 	out = append(out, xs...)
 
 	// Discard buffer and trailing quote
-	d.json.Discard(len(buf) + 1)
+	_, _ = d.json.Discard(len(buf) + 1)
 
 	err = d.readObjectTerminator()
 	if err != nil {
@@ -1218,7 +1218,7 @@ func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 		return nil, d.parseError('t', "expected 'true'")
 	}
 
-	d.json.Discard(3)
+	_, _ = d.json.Discard(3)
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1255,7 +1255,7 @@ func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 	out = append(out, xs...)
 
 	// Discard buffer and trailing quote
-	d.json.Discard(len(buf) + 1)
+	_, _ = d.json.Discard(len(buf) + 1)
 
 	err = d.readObjectTerminator()
 	if err != nil {
@@ -1300,7 +1300,7 @@ func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 	out = append(out, xs...)
 
 	// Discard buffer and trailing quote
-	d.json.Discard(len(buf) + 1)
+	_, _ = d.json.Discard(len(buf) + 1)
 
 	err = d.readObjectTerminator()
 	if err != nil {
@@ -1342,7 +1342,7 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 	out = append(out, xs...)
 
 	// Discard buffer and trailing quote
-	d.json.Discard(len(buf) + 1)
+	_, _ = d.json.Discard(len(buf) + 1)
 
 	err = d.readObjectTerminator()
 	if err != nil {
@@ -1388,7 +1388,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "key 'pattern' repeated")
 			}
 			sawPattern = true
-			d.json.Discard(len(key))
+			_, _ = d.json.Discard(len(key))
 			err = d.readNextChar('"')
 			if err != nil {
 				return nil, err
@@ -1419,7 +1419,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, d.parseError(key[0], "key 'options' repeated")
 			}
 			sawOptions = true
-			d.json.Discard(len(key))
+			_, _ = d.json.Discard(len(key))
 			err = d.readNextChar('"')
 			if err != nil {
 				return nil, err
@@ -1511,12 +1511,12 @@ func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 				return nil, d.parseError(buf[0], fmt.Sprintf("error parsing base64 data: %s", err))
 			}
 			out = append(out, xs[0:n]...)
-			d.json.Discard(len(buf))
+			_, _ = d.json.Discard(len(buf))
 		}
 
 		// If terminated, discard closing quote
 		if terminated {
-			d.json.Discard(1)
+			_, _ = d.json.Discard(1)
 		}
 	}
 

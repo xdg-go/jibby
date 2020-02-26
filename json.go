@@ -56,10 +56,7 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 	default:
 		// Either a number or an error.  We can't write the type byte
 		// until the number type is determined, so pass it down.
-		err = d.json.UnreadByte()
-		if err != nil {
-			return nil, err
-		}
+		_ = d.json.UnreadByte()
 		out, err = d.convertNumber(out, typeBytePos)
 		if err != nil {
 			return nil, err
@@ -220,10 +217,7 @@ func (d *Decoder) convertArray(out []byte) ([]byte, error) {
 	}
 
 	// Not empty: unread the byte for convertValue to check
-	err = d.json.UnreadByte()
-	if err != nil {
-		return nil, err
-	}
+	_ = d.json.UnreadByte()
 
 	// Record position for the placeholder type byte that we write
 	typeBytePos := len(out)
@@ -291,17 +285,16 @@ func (d *Decoder) convertTrue(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, newReadError(err)
 	}
+	if len(rest) < 3 {
+		return nil, newReadError(io.ErrUnexpectedEOF)
+	}
 	// already saw 't', looking for "rue"
 	if rest[0] != 'r' || rest[1] != 'u' || rest[2] != 'e' {
 		return nil, d.parseError('t', "expecting true")
 	}
+	_, _ = d.json.Discard(3)
 
 	out = append(out, 1)
-
-	_, err = d.json.Discard(3)
-	if err != nil {
-		return nil, fmt.Errorf("unexpected error discarding buffered reader: %v", err)
-	}
 	return out, nil
 }
 
@@ -310,17 +303,16 @@ func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, newReadError(err)
 	}
+	if len(rest) < 4 {
+		return nil, newReadError(io.ErrUnexpectedEOF)
+	}
 	// Already saw 'f', looking for "alse"
 	if rest[0] != 'a' || rest[1] != 'l' || rest[2] != 's' || rest[3] != 'e' {
 		return nil, d.parseError('f', "expecting false")
 	}
+	_, _ = d.json.Discard(4)
 
 	out = append(out, 0)
-
-	_, err = d.json.Discard(4)
-	if err != nil {
-		return nil, fmt.Errorf("unexpected error discarding buffered reader: %v", err)
-	}
 	return out, nil
 }
 
@@ -329,17 +321,17 @@ func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, newReadError(err)
 	}
+	if len(rest) < 3 {
+		return nil, newReadError(io.ErrUnexpectedEOF)
+	}
 	// Already saw 'n', looking for "ull"
 	if rest[0] != 'u' || rest[1] != 'l' || rest[2] != 'l' {
 		return nil, d.parseError('n', "expecting null")
 	}
+	_, _ = d.json.Discard(3)
 
 	// Nothing to write
 
-	_, err = d.json.Discard(3)
-	if err != nil {
-		return nil, fmt.Errorf("unexpected error discarding buffered reader: %v", err)
-	}
 	return out, nil
 }
 
@@ -363,7 +355,7 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 		}
 	}
 
-	d.json.Discard(len(buf))
+	_, _ = d.json.Discard(len(buf))
 
 	return out, nil
 }
@@ -489,12 +481,9 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 		// If terminated, closing quote is at index i, so discard i + 1 bytes to include it,
 		// otherwise only discard i bytes to skip the text we've copied.
 		if terminated {
-			_, err = d.json.Discard(i + 1)
+			_, _ = d.json.Discard(i + 1)
 		} else {
-			_, err = d.json.Discard(i)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unexpected error discarding buffered reader: %v", err)
+			_, _ = d.json.Discard(i)
 		}
 	}
 
