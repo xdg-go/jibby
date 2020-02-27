@@ -1,3 +1,9 @@
+// Copyright 2020 by David A. Golden. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
 package jibby
 
 import (
@@ -101,6 +107,9 @@ func convertWithGoDriver(input []byte) ([]byte, error) {
 	return got, err
 }
 
+// objectify takes non-object top level value (e.g. `[ 42 ]`) and turns it into
+// an object (e.g. `{ "a": [ 42 ] }`), as jibby only converts objects at the top
+// level.  A BOM and leading white space is preserved.
 func objectify(input []byte) []byte {
 	// Skip over BOM and leading spaces
 	i := bomLength(input)

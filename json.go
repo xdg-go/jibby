@@ -1,3 +1,9 @@
+// Copyright 2020 by David A. Golden. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
 package jibby
 
 import (
@@ -9,6 +15,9 @@ import (
 	"strconv"
 )
 
+// convertValue starts before any bytes of a value have been read.  It detects
+// the value's type and dispatches to a handler.  It supports all JSON value
+// types. (The `convertObject` handler handles extended JSON.)
 func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 	ch, err := d.readAfterWS()
 	if err != nil {
@@ -54,8 +63,10 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		// Either a number or an error.  We can't write the type byte
-		// until the number type is determined, so pass it down.
+		// This is either a number or an error, so we unread the byte, assume
+		// number and let that handler give us any error.  We can't write the
+		// type byte until the number type is determined (int64, int32, double),
+		// so we pass in the type byte position.
 		_ = d.json.UnreadByte()
 		out, err = d.convertNumber(out, typeBytePos)
 		if err != nil {
@@ -66,6 +77,7 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertObject starts after the opening brace of an object.
 func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error) {
 	var ch byte
 	var err error
@@ -78,7 +90,8 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 	}
 	defer func() { d.curDepth-- }()
 
-	// Note position of placeholder for length that we write
+	// Note position of placeholder for length that we write, but don't
+	// write yet in case this turns out to be extended JSON.
 	lengthPos := len(out)
 
 	// Check for empty object or start of key
@@ -92,9 +105,8 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
-		// If ExtJSON enabled and found on this first key, delegate value
-		// writing to it.  If it doesn't return a byte buffer, the value wasn't
-		// extended JSON.
+		// If ExtJSON enabled and `handleExtJSON` returns a buffer, then this
+		// value was extended JSON and the value has been consumed.
 		if d.extJSONAllowed {
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
@@ -105,12 +117,11 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 			}
 		}
 
-		// Not extended JSON, so now write the length placeholders and document
-		// type byte.
+		// Not extended JSON, so now write the length placeholder
 		out = append(out, emptyLength...)
 		overwriteTypeByte(out, outerTypeBytePos, bsonDocument)
 
-		// Record position for the placeholder type byte that we write
+		// Record position for the placeholder type byte
 		typeBytePos = len(out)
 		out = append(out, emptyType)
 
@@ -135,6 +146,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 		return nil, err
 	}
 
+	// Loop, looking for separators or object terminator
 LOOP:
 	for {
 		ch, err = d.readAfterWS()
@@ -188,6 +200,7 @@ LOOP:
 	return out, nil
 }
 
+// convertObject starts after the opening bracket of an array.
 func (d *Decoder) convertArray(out []byte) ([]byte, error) {
 	var ch byte
 	var err error
@@ -236,6 +249,7 @@ func (d *Decoder) convertArray(out []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// Loop, looking for separators or array terminator
 LOOP:
 	for {
 		ch, err = d.readAfterWS()
@@ -280,6 +294,7 @@ LOOP:
 	return out, nil
 }
 
+// convertTrue starts after the 't' for true has been read.
 func (d *Decoder) convertTrue(out []byte) ([]byte, error) {
 	rest, err := d.json.Peek(3)
 	if err != nil {
@@ -298,6 +313,7 @@ func (d *Decoder) convertTrue(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertTrue starts after the 'f' for false has been read.
 func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	rest, err := d.json.Peek(4)
 	if err != nil {
@@ -316,6 +332,7 @@ func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertTrue starts after the 'n' for null has been read.
 func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 	rest, err := d.json.Peek(3)
 	if err != nil {
@@ -335,7 +352,11 @@ func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertNumber starts before any of the number has been read.  Have to peek
+// ahead in the buffer to find the end point and whether to convert as integer
+// or floating point.  It consumes the number from input when finished.
 func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
+	// Peek ahead to find the bytes that make up the number representation.
 	buf, isFloat, err := d.peekNumber()
 	if err != nil {
 		return nil, err
@@ -348,7 +369,7 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 	} else {
-		// Still don't know the type, so delegate.
+		// Still don't know if the type is int32 or int64, so delegate.
 		out, err = d.convertInt(out, typeBytePos, buf)
 		if err != nil {
 			return nil, err
@@ -360,6 +381,8 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertFloat converts the floating-point number in the buffer.  It does not
+// consume any of the input.
 func (d *Decoder) convertFloat(out []byte, buf []byte) ([]byte, error) {
 	n, err := strconv.ParseFloat(string(buf), 64)
 	if err != nil {
@@ -373,6 +396,8 @@ func (d *Decoder) convertFloat(out []byte, buf []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertInt converts the integer number in the buffer.  It does not consume
+// any of the input.
 func (d *Decoder) convertInt(out []byte, typeBytePos int, buf []byte) ([]byte, error) {
 	n, err := strconv.ParseInt(string(buf), 10, 64)
 	if err != nil {
@@ -397,8 +422,18 @@ func (d *Decoder) convertInt(out []byte, typeBytePos int, buf []byte) ([]byte, e
 	return out, nil
 }
 
+// convertCString starts after the opening quote of a string.  It peeks ahead in
+// 64 byte chunks, consuming input when writing to the output.  It handles JSON
+// string escape sequences, which may require consuming a partial chunk and
+// peeking ahead to see the rest of an escape sequence.  When finished, the
+// string and its closing quote have been consumed from the input.
 func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 	var terminated bool
+
+	// charsNeeded indicates how much we expect to peek ahead.  Normally, we
+	// always expect to peek at least 1 ahead (for the closing quote), but when
+	// handling escape sequences, that may change.  Being unable to peek the
+	// desired amount ahead indicates unexpected EOF.
 	var charsNeeded = 1
 
 	for !terminated {
@@ -425,9 +460,8 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 			case '\\':
 				// need at least two chars in buf
 				if len(buf)-i < 2 {
-					// backslash is last char in peek buffer, so back up one
-					// and break out to repeat peek from the backslash, this
-					// time, needing at least two characters
+					// not enough characters left, so break out to repeat peek
+					// from the backslash but requiring at least two characters
 					charsNeeded = 2
 					break INNER
 				}
@@ -452,7 +486,7 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 					out = append(out, '\t')
 					i++
 				case 'u':
-					// "\uXXXX" needs 6 chars total from i, otherwise back up
+					// "\uXXXX" needs 6 chars total from i, otherwise break out
 					// and repeek, needing 6 chars
 					if len(buf)-i < 6 {
 						charsNeeded = 6
@@ -468,7 +502,7 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 				default:
 					return nil, fmt.Errorf("parse error: unknown escape '%s'", string(buf[i+1]))
 				}
-				// escape done, go back to needing only one char at a time
+				// Escape is done: go back to needing only one char at a time.
 				charsNeeded = 1
 			case '"':
 				terminated = true
@@ -493,6 +527,8 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertString starts after the opening quote of a string.  It works like
+// convertCString except it prepends the length of the string.
 func (d *Decoder) convertString(out []byte) ([]byte, error) {
 	lengthPos := len(out)
 	out = append(out, emptyLength...)

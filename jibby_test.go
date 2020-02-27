@@ -1,3 +1,9 @@
+// Copyright 2020 by David A. Golden. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
 package jibby
 
 import (
@@ -14,6 +20,8 @@ import (
 const JSONTestSuite = "testdata/JSONTestSuite/test_parsing"
 const JibbyTestSuite = "testdata/jibbytests"
 
+// TestJSONTestSuite_Passing tests the seriot.ch corpus for
+// cases that must pass.
 func TestJSONTestSuite_Passing(t *testing.T) {
 	t.Helper()
 	t.Parallel()
@@ -26,6 +34,8 @@ func TestJSONTestSuite_Passing(t *testing.T) {
 	}
 }
 
+// TestJibbyTestSuite_Passing tests additional cases in the
+// same format as the seriot.ch corpus that must pass.
 func TestJibbyTestSuite_Passing(t *testing.T) {
 	t.Helper()
 	t.Parallel()
@@ -38,13 +48,15 @@ func TestJibbyTestSuite_Passing(t *testing.T) {
 	}
 }
 
-// Some errors are allowed for implementation-defined behaviors.
+// For implementation defined behavior: these errors are allowed as we don't
+// support the related features.
 var allowedErrors = []string{
 	"detected unsupported", // 16/32-bit BOM
 	"value out of range",   // large ints/floats
 }
 
-// We assume valid UTF-8; these files test handling invalid strings.
+// We assume valid UTF-8; these files test handling invalid strings,
+// so we skip these files.
 var unsupportedTests = map[string]bool{
 	"i_string_UTF-8_invalid_sequence.json":         true,
 	"i_string_UTF8_surrogate_U+D800.json":          true,
@@ -60,6 +72,8 @@ var unsupportedTests = map[string]bool{
 	"i_string_utf16LE_no_BOM.json":                 true,
 }
 
+// TestJSONTestSuite_Passing tests the seriot.ch corpus for cases that are
+// implementation defined.  Variables above define exclusions.
 func TestJSONTestSuite_ImplDefined(t *testing.T) {
 	t.Helper()
 	t.Parallel()
@@ -103,6 +117,8 @@ func testPassingConversion(t *testing.T, f string, allowedErrStrings []string) {
 	}
 }
 
+// TestJSONTestSuite_Failing tests the seriot.ch corpus for
+// cases that must error.
 func TestJSONTestSuite_Failing(t *testing.T) {
 	t.Parallel()
 
@@ -128,6 +144,8 @@ func TestJSONTestSuite_Failing(t *testing.T) {
 	}
 }
 
+// TestStreaming has tests for document streams, including different formats,
+// empty lists, error cases, etc.
 func TestStreaming(t *testing.T) {
 	t.Parallel()
 
@@ -310,6 +328,7 @@ func TestStreaming(t *testing.T) {
 	}
 }
 
+// TestDepthLimit checks the ability to set a depth limit.
 func TestDepthLimit(t *testing.T) {
 	t.Parallel()
 

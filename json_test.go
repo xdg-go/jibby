@@ -1,8 +1,15 @@
+// Copyright 2020 by David A. Golden. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
 package jibby
 
 import "testing"
 
-// This function tests both the Unmarshal function and various primitive types.
+// TestUnmarshal tests both the Unmarshal function and various primitive types,
+// including some error cases where needed for test coverage.
 //
 // Some tests adapted from the MongoDB BSON Corpus, licensed CC by-sa-nc:
 // https://github.com/mongodb/specifications/blob/master/source/bson-corpus/bson-corpus.rst

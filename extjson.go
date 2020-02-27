@@ -1,3 +1,9 @@
+// Copyright 2020 by David A. Golden. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
 package jibby
 
 import (
@@ -19,19 +25,20 @@ import (
 //
 // The longest extended JSON key is $regularExpression at 18 letters
 // The shortest extended JSON key is $oid at 3 letters.  Any $-prefixed
-// key outside those lengths isn't extended JSON.
-
+// key outside those lengths isn't extended JSON.  We can switch on
+// length to avoid a linear scan against all keys.
+//
 // $oid
 // $code
 // $date
-// $type -- legacy $binary option
+// $type -- option for legacy $binary
 // $scope
-// $regex -- legacy regular expression -- if document, not string, don't parse
+// $regex -- legacy regular expression
 // $binary
 // $maxKey
 // $minKey
 // $symbol
-// $options -- legacy regular expression; requires a string $options and $regex
+// $options -- option for legacy regular expression
 // $dbPointer
 // $numberInt
 // $timestamp
@@ -41,6 +48,18 @@ import (
 // $numberDecimal
 // $regularExpression
 
+// handleExtJSON is called from convertObject to potentially replace a JSON
+// object with a non-document BSON value instead.  If it returns (nil, nil), it
+// means that the input is not extended JSON and that no bytes were consumed
+// from the input.  If it succeeds, then the extended JSON object will have been
+// consumed.
+//
+// If/when a type is definitively determined, the `typeBytePos` of
+// `out` will be overwritten the discovered type.
+//
+// This function generally only validates/dispatches to subroutines.  Those
+// functions are responsible for consuming the full extended JSON object,
+// including the closing terminator.
 func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead for longest possible extjson key plus closing quote.
 	buf, err := d.json.Peek(19)
@@ -64,6 +83,10 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	}
 	key := buf[0:quotePos]
 
+	// When we find a key, we can write a type byte and discard from the input
+	// buffer the length of that key plus one for the closing quote.  In
+	// ambiguous cases, we can't assign a type or discard, so we defer that
+	// to a corresponding subroutine.
 	switch len(key) {
 	case 4: // $oid
 		if bytes.Equal(key, jsonOID) {
@@ -75,7 +98,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 5: // $code $date $type
 		if bytes.Equal(key, jsonCode) {
 			// Still don't know if this is code or code w/scope, so can't
-			// assign type yet.
+			// assign type yet, but we can consume the key.
 			_, _ = d.json.Discard(6)
 			return d.convertCode(out, typeBytePos)
 		} else if bytes.Equal(key, jsonDate) {
@@ -84,7 +107,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 			return d.convertDate(out)
 		} else if bytes.Equal(key, jsonType) {
 			// Still don't know if this is binary or a $type query operator, so
-			// can't assign type *or* discard anything yet.
+			// can't assign type or discard anything yet.
 			return d.convertType(out, typeBytePos)
 		}
 		return nil, nil
@@ -95,7 +118,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 			return d.convertScope(out)
 		} else if bytes.Equal(key, jsonRegex) {
 			// Still don't know if this is legacy $regex or a $regex query
-			// operator so can't assign type or discard yet.
+			// operator so can't assign type or discard anything yet.
 			return d.convertRegex(out, typeBytePos)
 		}
 		return nil, nil
@@ -121,7 +144,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 8: // $options
 		if bytes.Equal(key, jsonOptions) {
 			// Still don't know if this is legacy $regex or non-extJSON
-			// so can't assign type or discard yet.
+			// so can't assign type or discard anything yet.
 			return d.convertOptions(out, typeBytePos)
 		}
 		return nil, nil
@@ -181,6 +204,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	}
 }
 
+// convertOID starts after the `"$oid"` key.
 func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -212,8 +236,9 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	}
 	out = append(out, xs...)
 
-	// look for object close
 	_, _ = d.json.Discard(25)
+
+	// Must end with document terminator
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -222,14 +247,16 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Starts after `"$code"`.  Need to find out if it's just $code or followed by
-// $scope to determine type byte.
+// convertCode starts after the `"$code"` key.  We need to find out if it's just
+// $code or followed by $scope to determine type byte.
 //
-// Problem is that code is just "string" and code w/scope is "int32 string
-// document", so we can't copy code string to output until after we see if there
-// is a $scope key so we know if we need the int32 length part.
+// The problem with translation is that BSON code is just "string" and BSON code
+// w/scope is "int32 string document", so we can't copy the code string to the
+// BSON output until after we see if there is a $scope key so we know if we need
+// to add the int32 length part.
 func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
-	// Whether code string or code w/scope, need to reserve 4 bytes for a length.
+	// Whether code string or code w/scope, need to reserve at least 4 bytes for
+	// a length, as both start that way.
 	lengthPos := len(out)
 	out = append(out, emptyLength...)
 
@@ -244,14 +271,14 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 		return nil, err
 	}
 
-	// Make a copy of code cstring to defer writing
+	// Make a copy of code cstring to defer writing.
 	codeCString := make([]byte, 0, 256)
 	codeCString, err = d.convertCString(codeCString)
 	if err != nil {
 		return nil, err
 	}
 
-	// Look for value separator or object terminator
+	// Look for value separator or object terminator.
 	ch, err := d.readAfterWS()
 	if err != nil {
 		return nil, newReadError(err)
@@ -275,7 +302,8 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 
-		// We know it's code w/ scope: write Cstring with length, then object
+		// We know it's code w/ scope: add additional length bytes for the
+		// Cstring, then convert the scope object.
 		overwriteTypeByte(out, typeBytePos, bsonCodeWithScope)
 		strLengthPos := len(out)
 		out = append(out, emptyLength...)
@@ -308,8 +336,10 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertDate starts after the `"$date"` key.  The value might be
+// an ISO-8601 string or might be a $numberLong object.
 func (d *Decoder) convertDate(out []byte) ([]byte, error) {
-	// consume ':'
+	// Consume ':'
 	err := d.readNameSeparator()
 	if err != nil {
 		return nil, err
@@ -321,10 +351,10 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 	}
 	switch ch {
 	case '"':
-		// shortest ISO-8601 is `YYYY-MM-DDTHH:MM:SSZ` (20 chars); longest is
+		// Shortest ISO-8601 is `YYYY-MM-DDTHH:MM:SSZ` (20 chars); longest is
 		// `YYYY-MM-DDTHH:MM:SS.sss+HH:MM` (29 chars).  Plus we need the closing
 		// quote.  Peek a little further in case extra precision is given
-		// (counter to the spec)
+		// (counter to the spec).
 		buf, err := d.peekBoundedQuote(21, 48)
 		if err != nil {
 			return nil, err
@@ -364,16 +394,16 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Starts after `"` of `"$type"` for key.  Need to distinguish between
-// Extended JSON $type or MongoDB $type query operator.
-// If we can peek far enough, we can check with regular expresssions.
+// convertType starts after the opening quote of the `"$type"` key.  We need to
+// distinguish between Extended JSON $type or MongoDB $type query operator.  If
+// we can peek far enough, we can check with regular expresssions.
 
 var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s*:\s*"\d\d?"`)
 var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s*:\s*(\d+|"\w+"|\{)`)
 
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
-	// covers a pathological case with excessive white space
+	// covers a pathological case with excessive white space.
 	var isExtJSON bool
 	peekDistance := 64
 	var err error
@@ -393,7 +423,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 			isExtJSON = true
 			break
 		} else if dollarTypeQueryOpRe.Match(buf) {
-			// Signal not extended JSON with double nil.
+			// Signal this is not extended JSON.
 			return nil, nil
 		}
 		if len(buf) < peekDistance {
@@ -414,6 +444,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 
 	// Discard $type key and closing quote
 	_, _ = d.json.Discard(6)
+
 	// Read name separator and opening quote
 	err = d.readNameSeparator()
 	if err != nil {
@@ -423,6 +454,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Read type bytes, decode, and write them
 	out, err = d.convertBinarySubType(out, subTypeBytePos)
 	if err != nil {
@@ -465,6 +497,8 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertBinarySubType starts after the opening quote of the string holding hex
+// bytes of the value.
 func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, error) {
 	subTypeBytes, err := d.peekBoundedQuote(2, 3)
 	if err != nil {
@@ -487,8 +521,9 @@ func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, 
 	return out, nil
 }
 
-// Leading $scope means code w/ scope, but we have to buffer the scope
-// document and write it after we convert the code string
+// convertScope starts after the `"$scope"` key.  Having a leading $scope means
+// this is code w/ scope, but we have to buffer the scope document and write it
+// to the destination after we convert the $code string that follows.
 func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -496,9 +531,11 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// Reserve length bytes for full code w/ scope length
 	cwsLengthPos := len(out)
 	out = append(out, emptyLength...)
 
+	// Copy $scope into a temporary BSON document
 	scopeDoc := make([]byte, 0, 256)
 	err = d.readCharAfterWS('{')
 	if err != nil {
@@ -509,7 +546,7 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Read $code
+	// Find and copy $code to the output
 	err = d.readCharAfterWS(',')
 	if err != nil {
 		return nil, err
@@ -531,7 +568,7 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Write buffered scope
+	// Write buffered $scope
 	out = append(out, scopeDoc...)
 
 	// BSON code w/scope length is total length including length bytes
@@ -540,6 +577,18 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 
 	return out, nil
 }
+
+// convertRegex starts after the opening quote of `"$regex"`.  We need to
+// distinguish between Extended JSON $regex or MongoDB $regex query operator.
+// If we can peek far enough, we can check with regular expresssions.
+//
+// Both query and extended JSON allow { "$regex": "...", "$options": "..." } so
+// we choose to treat that like extended JSON.  If converted to a BSON regular
+// expression and sent as a query to a MongoDB and it will work either way.
+// However, a Javascript query expression like { "$regex": /abc/ } will turn
+// into extended JSON like { "$regex" : { <$regex or $regularExpression object>
+// } }, so if we see that "$regex" is followed by an object, we treat that as a
+// query.
 
 var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"`)
 var dollarRegexQueryOpRe = regexp.MustCompile(`^\$regex"\s*:\s*\{`)
@@ -578,10 +627,12 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
 	}
 
+	// If we reach here, then confirmed this as a regular expression BSON type.
 	overwriteTypeByte(out, typeBytePos, bsonRegex)
 
 	// Discard $regex key and closing quote
 	_, _ = d.json.Discard(7)
+
 	// Read name separator and opening quote
 	err = d.readNameSeparator()
 	if err != nil {
@@ -615,6 +666,7 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Read options string
 	out, err = d.convertCString(out)
 	if err != nil {
@@ -630,6 +682,10 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertBinary starts after the `"$binary"` key.  However, we have to
+// determine if it is legacy extended JSON, where $binary holds the data and is
+// followed by a $type field, or v2 extended JSON where $binary is followed by
+// an object that holds the data and subtype.
 func (d *Decoder) convertBinary(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -667,10 +723,10 @@ func (d *Decoder) convertBinary(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// v2 $binary is a document with keys "base64" and "subType".
-// This function is called after the opening bracket is already read.
+// convertV2Binary is called after the opening brace of the object.  V2 $binary
+// must be an object with keys "base64" and "subType".
 func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
-	// write a length placeholder and a type placeholder
+	// write a length placeholder and a subtype byte placeholder
 	lengthPos := len(out)
 	out = append(out, emptyLength...)
 	subTypeBytePos := len(out)
@@ -680,15 +736,16 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 	var sawBase64 bool
 	var sawSubType bool
 	for {
+		// Read the opening quote of the key and peek the key.
 		err := d.readQuoteStart()
 		if err != nil {
 			return nil, err
 		}
-
 		key, err := d.peekBoundedQuote(7, 8)
 		if err != nil {
 			return nil, err
 		}
+
 		switch {
 		case bytes.Equal(key, jsonSubType):
 			if sawSubType {
@@ -708,6 +765,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawBase64 {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -732,6 +790,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawSubType {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -746,8 +805,8 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 		}
 	}
 
-	// write length of binary payload (added length minux 5 bytes for
-	// length+type)
+	// write length of binary payload (added length of the output minux 5 bytes
+	// for length+type)
 	binLength := len(out) - lengthPos - 5
 	overwriteLength(out, lengthPos, binLength)
 
@@ -760,15 +819,16 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// v1 $binary is a string, followed by "$type" and no other keys.  This function
-// is called after the opening quote of the base64 payload is already read.
+// convertV2Binary is called after the opening quote of the base64 payload. v1
+// $binary is a string, followed by "$type" and no other keys.
 func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
-	// write a length placeholder and a type placeholder
+	// Write a length placeholder and a subtype byte placeholder
 	lengthPos := len(out)
 	out = append(out, emptyLength...)
 	subTypeBytePos := len(out)
 	out = append(out, emptyType)
 
+	// Read the payload
 	out, err := d.convertBase64(out)
 	if err != nil {
 		return nil, err
@@ -804,14 +864,18 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// write length of binary payload (added length minux 5 bytes for
-	// length+type)
+	// write length of binary payload (added length of the output minux 5 bytes
+	// for length+type)
 	binLength := len(out) - lengthPos - 5
 	overwriteLength(out, lengthPos, binLength)
 
 	return out, nil
 }
 
+// convertMinMaxKey starts after the `"$minKey"` or `"$maxKey"` key.  In either
+// case the type byte is already set and the only value for the key is `1` and
+// no futher data has to be written. This function only validates and consumes
+// input.
 func (d *Decoder) convertMinMaxKey(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -832,6 +896,7 @@ func (d *Decoder) convertMinMaxKey(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertSymbol starts after the `"$symbol"` key.
 func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -855,6 +920,14 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 
 	return out, nil
 }
+
+// convertOptions starts after the opening quote of `"$regex"`.  We need to
+// distinguish between Extended JSON $regex or MongoDB $regex query operator.
+// If we can peek far enough, we can check with regular expresssions.
+//
+// See convertRegex for the logic differentiating the query and extended JSON
+// forms.  Unlike that function, the regular expressions here must look past
+// $option to find $regex to disambiguate.
 
 var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*"`)
 var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*\{`)
@@ -893,6 +966,7 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
 	}
 
+	// If we reach here, then confirmed this as a regular expression BSON type.
 	overwriteTypeByte(out, typeBytePos, bsonRegex)
 
 	// Discard $options key and closing quote
@@ -906,7 +980,9 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Read options string
+
+	// Read options string into a buffer because it has to follow the regular
+	// expression pattern.
 	opts := make([]byte, 0, 8)
 	opts, err = d.convertCString(opts)
 	if err != nil {
@@ -934,7 +1010,8 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Append options
+
+	// Append buffered options
 	out = append(out, opts...)
 
 	// Must end with document terminator.
@@ -946,6 +1023,8 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	return out, nil
 }
 
+// convertDBPointer starts after the `"$dbPointer"` key.  The value
+// must be an object with two keys, $ref and $id.
 func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -965,7 +1044,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 	var sawRef bool
 	var sawID bool
 	for {
-		// Read key and skip ahead to start of value.
+		// Read the opening quote of the key and peek the key.
 		err := d.readQuoteStart()
 		if err != nil {
 			return nil, err
@@ -998,6 +1077,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawID {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1024,6 +1104,8 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 			if id[0] != bsonObjectID {
 				return nil, fmt.Errorf("parse error: $dbPointer.$id must be BSON type %d, not type %d", bsonObjectID, id[0])
 			}
+
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawRef {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1031,7 +1113,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				}
 			}
 		default:
-			return nil, d.parseError(key[0], "invalid key for $regularExpression document")
+			return nil, d.parseError(key[0], "invalid key for $dbPointer document")
 		}
 		if sawRef && sawID {
 			break
@@ -1057,6 +1139,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertNumberInt starts after the `"$numberInt"` key.
 func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1087,6 +1170,7 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 	// Discard buffer and trailing quote
 	_, _ = d.json.Discard(len(buf) + 1)
 
+	// Must end with document terminator.
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1095,6 +1179,8 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertTimestamp starts after the `"$timestamp"` key.  The value
+// must be an object with two keys, t and i.
 func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1113,7 +1199,8 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 	var sawT bool
 	var sawI bool
 	for {
-		// Read key and skip ahead to start of value.
+		// Read key and skip ahead to start of value.  Because both keys are the
+		// same length, we can read instead of peeking.
 		err := d.readQuoteStart()
 		if err != nil {
 			return nil, err
@@ -1146,6 +1233,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawI {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1161,6 +1249,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawT {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1198,6 +1287,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertUndefined starts after the `"$undefined"` key.
 func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1219,6 +1309,8 @@ func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 	}
 
 	_, _ = d.json.Discard(3)
+
+	// Must end with document terminator.
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1227,6 +1319,7 @@ func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertNumberLong starts after the `"$numberLong"` key.
 func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1257,6 +1350,7 @@ func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 	// Discard buffer and trailing quote
 	_, _ = d.json.Discard(len(buf) + 1)
 
+	// Must end with document terminator.
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1265,6 +1359,7 @@ func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertNumberDouble starts after the `"$numberDouble"` key.
 func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1302,6 +1397,7 @@ func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 	// Discard buffer and trailing quote
 	_, _ = d.json.Discard(len(buf) + 1)
 
+	// Must end with document terminator.
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1310,6 +1406,7 @@ func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertNumberDecimal starts after the `"$numberDecimal"` key.
 func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1344,6 +1441,7 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 	// Discard buffer and trailing quote
 	_, _ = d.json.Discard(len(buf) + 1)
 
+	// Must end with document terminator.
 	err = d.readObjectTerminator()
 	if err != nil {
 		return nil, err
@@ -1352,6 +1450,8 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 	return out, nil
 }
 
+// convertRegularExpression starts after the `"$regularExpression"` key.
+// The value must be a document with two keys "pattern" and "options".
 func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 	// consume ':'
 	err := d.readNameSeparator()
@@ -1371,7 +1471,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 	var sawPattern bool
 	var sawOptions bool
 	for {
-		// Read key and skip ahead to start of value.
+		// Read the opening quote of the key and peek the key.
 		err := d.readQuoteStart()
 		if err != nil {
 			return nil, err
@@ -1408,6 +1508,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawOptions {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1439,6 +1540,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
+			// If we haven't seen the other key, we expect to see a separator.
 			if !sawPattern {
 				err = d.readCharAfterWS(',')
 				if err != nil {
@@ -1472,7 +1574,8 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// starts after opening quote mark
+// convertBase64 expects to start after an opening quote mark and consumes
+// the string and closing quote.
 func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 	enc := base64.StdEncoding.WithPadding('=')
 	var terminated bool
@@ -1504,7 +1607,8 @@ func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 			buf = buf[0:quotePos]
 		}
 
-		// If we have characters, decode and append them
+		// If we have characters, decode and append them, then discard the
+		// input.
 		if len(buf) > 0 {
 			n, err := enc.Decode(xs, buf)
 			if err != nil {
@@ -1514,7 +1618,7 @@ func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 			_, _ = d.json.Discard(len(buf))
 		}
 
-		// If terminated, discard closing quote
+		// If terminated, discard the closing quote.
 		if terminated {
 			_, _ = d.json.Discard(1)
 		}
