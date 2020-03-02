@@ -73,6 +73,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary, subtype too long",
+			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "123"}}}`,
+			errStr: "exceeds expected length 2",
+		},
+		{
 			label:  "$binary, single type digit",
 			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "3"}}}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
