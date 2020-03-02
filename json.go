@@ -515,6 +515,9 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 				terminated = true
 				break INNER
 			default:
+				if buf[i] < ' ' {
+					return nil, fmt.Errorf("parse error: control characters not allowed in strings")
+				}
 				out = append(out, buf[i])
 			}
 		}

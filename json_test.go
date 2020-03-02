@@ -111,6 +111,11 @@ func TestUnmarshal(t *testing.T) {
 			input:  `{"a" : "\U00e9"}`,
 			errStr: "parse error: unknown escape",
 		},
+		{
+			label:  "control character unescaped",
+			input:  "{\"a\" : \"\x07\"}",
+			errStr: "parse error: control characters",
+		},
 		// Int32
 		{
 			label:  "MinInt32",
