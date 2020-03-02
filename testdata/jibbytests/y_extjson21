@@ -1,0 +1,1 @@
+{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "im"}}}
