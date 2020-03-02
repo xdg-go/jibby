@@ -286,11 +286,18 @@ func (d *Decoder) peekNumber() ([]byte, bool, error) {
 LOOP:
 	for i = 0; i < len(buf); i++ {
 		switch buf[i] {
-		case 'e', 'E', '.':
+		case 'e', 'E':
 			isFloat = true
+		case '.':
+			isFloat = true
+			if i < len(buf)-1 && (buf[i+1] < '0' || buf[i+1] > '9') {
+				return nil, false, d.parseError(buf[i], "decimal must be followed by digit")
+			}
 		case ' ', '\t', '\n', '\r', ',', ']', '}':
 			terminated = true
 			break LOOP
+		case '_':
+			return nil, false, d.parseError(buf[i], "invalid character in number")
 		}
 	}
 
@@ -299,6 +306,29 @@ LOOP:
 			return nil, false, newReadError(io.ErrUnexpectedEOF)
 		}
 		return nil, false, d.parseError(buf[0], "number too long")
+	}
+
+	// Do some validation before ParseInt/ParseFloat for basic sanity and for
+	// things that ParseInt/ParseFloat are liberal about.
+	num := buf[0:i]
+
+	// Check for optional leading minus; skip it for other validation
+	if len(num) > 1 && num[0] == '-' {
+		num = num[1:]
+	}
+
+	// Check for empty string
+	if len(num) == 0 {
+		return nil, false, d.parseError(buf[0], "number not found")
+	}
+
+	// Check for number
+	if num[0] < '0' || num[0] > '9' {
+		return nil, false, d.parseError(buf[i], "invalid character in number")
+	}
+
+	if num[0] == '0' && len(num) > 1 && num[1] != '.' && num[1] != 'e' && num[1] != 'E' {
+		return nil, false, d.parseError(buf[0], "leading zeros not allowed")
 	}
 
 	// Return the slice without the terminating character.
