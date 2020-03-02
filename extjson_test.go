@@ -178,6 +178,11 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a" : {"$date" : "1970-01-01T00:00:00Z"}}`,
 		},
 		{
+			label:  "$date, invalid object",
+			input:  `{"a" : {"$date" : {"00000" : "0"}}}`,
+			errStr: `expected "$numberLong"`,
+		},
+		{
 			label:  "$maxKey",
 			input:  `{"a" : {"$maxKey" : 1}}`,
 			output: "080000007F610000",
