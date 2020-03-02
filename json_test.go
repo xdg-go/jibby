@@ -97,6 +97,16 @@ func TestUnmarshal(t *testing.T) {
 			errStr: "parse error: converting unicode escape",
 		},
 		{
+			label:  "invalid unicode escape",
+			input:  `{"a" : "\u+062"}`,
+			errStr: "parse error: converting unicode escape",
+		},
+		{
+			label:  "invalid unicode escape",
+			input:  `{"a" : "\u-062"}`,
+			errStr: "parse error: converting unicode escape",
+		},
+		{
 			label:  "unknown escape",
 			input:  `{"a" : "\U00e9"}`,
 			errStr: "parse error: unknown escape",

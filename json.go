@@ -493,7 +493,7 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 						break INNER
 					}
 					// convert next 4 bytes to rune and append it as UTF-8
-					n, err := strconv.ParseInt(string(buf[i+2:i+6]), 16, 32)
+					n, err := strconv.ParseUint(string(buf[i+2:i+6]), 16, 32)
 					if err != nil {
 						return nil, fmt.Errorf("parse error: converting unicode escape: %v", err)
 					}
