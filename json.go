@@ -110,7 +110,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 	case '"':
 		// If ExtJSON enabled and `handleExtJSON` returns a buffer, then this
 		// value was extended JSON and the value has been consumed.
-		if d.extJSONAllowed {
+		if d.extJSONAllowed && outerTypeBytePos != topContainer {
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
 				return nil, err

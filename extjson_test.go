@@ -192,6 +192,11 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a" : {"$undefined" : true}}`,
 			output: "0800000006610000",
 		},
+		{
+			label:  "top level not extended JSON",
+			input:  `{"$symbol": "abc"}`,
+			output: "16000000022473796d626f6c00040000006162630000",
+		},
 	}
 
 	testWithUnmarshal(t, cases, true)
