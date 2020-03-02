@@ -423,7 +423,7 @@ func (d *Decoder) parseError(ch byte, msg string) error {
 // new buffer will be allocated on demand.  The final buffer is returned, just
 // like with `append`.  The function returns io.EOF if the input is empty.
 func Unmarshal(in []byte, out []byte) ([]byte, error) {
-	jsonReader := bufio.NewReader(bytes.NewReader([]byte(in)))
+	jsonReader := bufio.NewReaderSize(bytes.NewReader([]byte(in)), 8192)
 	jib, err := NewDecoder(jsonReader)
 	if err != nil {
 		return nil, err
@@ -434,12 +434,12 @@ func Unmarshal(in []byte, out []byte) ([]byte, error) {
 // UnmarshalExtJSON converts a single Extended JSON object to a BSON document.
 // It otherwise works like `Unmarshal`.
 func UnmarshalExtJSON(in []byte, out []byte) ([]byte, error) {
-	jsonReader := bufio.NewReader(bytes.NewReader([]byte(in)))
+	jsonReader := bufio.NewReaderSize(bytes.NewReader([]byte(in)), 8192)
 	jib, err := NewDecoder(jsonReader)
-	jib.ExtJSON(true)
 	if err != nil {
 		return nil, err
 	}
+	jib.ExtJSON(true)
 	return jib.Decode(out)
 }
 
