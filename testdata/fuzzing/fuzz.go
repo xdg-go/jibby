@@ -133,6 +133,7 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 var objectRE = regexp.MustCompile(`^\s*\{`)
 var dollarCodeRE = regexp.MustCompile(`\{\s*"\$code"\s*:`)
 var longSubtypeRE = regexp.MustCompile(`("\$type"\s*:\s*"...|"subType"\s*:\s*"...)`)
+var topLevelExtJSONRE = regexp.MustCompile(`^\s*\{\s*"\$\w+"`)
 
 func shouldSkip(data []byte, extjson bool) bool {
 	if len(data) > 2 && bytes.Equal(data[0:3], utf8BOM) {
@@ -155,6 +156,11 @@ func shouldSkip(data []byte, extjson bool) bool {
 			// GODRIVER-1505: driver allows long binary subtypes
 			return true
 		}
+		if topLevelExtJSONRE.Match(data) {
+			// GODRIVER-1504: driver tries to unmarshal top-level $-prefixed
+			// keys as ExtJSON
+			return true
+		}
 	}
 
 	return false
@@ -169,6 +175,10 @@ var driverFalseNegativeErrStrings = map[string]string{
 // isDriverFalseNegative returns true for errors detected by jibby that the
 // driver should have detected but failed to do so.
 func isDriverFalseNegative(jibbyErr error) bool {
-	_, ok := driverFalseNegativeErrStrings[jibbyErr.Error()]
-	return ok
+	for k := range driverFalseNegativeErrStrings {
+		if strings.Contains(jibbyErr.Error(), k) {
+			return true
+		}
+	}
+	return false
 }
