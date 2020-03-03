@@ -931,6 +931,7 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 
 var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*"`)
 var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*\{`)
+var dollarOptionsQueryElse = regexp.MustCompile(`^\$options"\s*:\s*(\d+|".{0,5}"|".....|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -954,6 +955,9 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 			isExtJSON = true
 			break
 		} else if dollarOptionsQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		} else if dollarOptionsQueryElse.Match(buf) {
 			// Signal not extended JSON with double nil.
 			return nil, nil
 		}

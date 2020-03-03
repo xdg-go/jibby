@@ -217,6 +217,11 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"":{"$type":""}}`,
 			output: "180000000300110000000224747970650001000000000000",
 		},
+		{
+			label:  "$options not extended JSON nor query",
+			input:  `{"":{"$options":"","000" : ""}}`,
+			output: "2500000003001e00000002246f7074696f6e73000100000000023030300001000000000000",
+		},
 	}
 
 	testWithUnmarshal(t, cases, true)
