@@ -244,10 +244,13 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 	charsNeeded := len(expected) + 1
 	key, err := d.peekBoundedQuote(charsNeeded, charsNeeded)
 	if err != nil {
-		return err
+		return fmt.Errorf("expected %q, but failed to find key: %v", string(expected), err)
 	}
 	if !bytes.Equal(key, expected) {
-		return d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
+		if len(key) > 0 {
+			return d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
+		}
+		return d.parseError('"', fmt.Sprintf("expected %q", string(expected)))
 	}
 	_, _ = d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
@@ -379,7 +382,7 @@ func (d *Decoder) readUInt32() (uint32, error) {
 	}
 	n, err := strconv.ParseUint(string(buf), 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("parser error: uint conversion: %v", err)
+		return 0, fmt.Errorf("parse error: uint conversion: %v", err)
 	}
 	_, _ = d.json.Discard(len(buf))
 	return uint32(n), nil
