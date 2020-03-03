@@ -168,6 +168,16 @@ func TestExtJSON(t *testing.T) {
 			output: "0F0000000B610061626300696D0000",
 		},
 		{
+			label:  "$regularExpression, options unsorted",
+			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "mi"}}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regularExpression, illegal options",
+			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "i0"}}}`,
+			errStr: "invalid regular expression option '0'",
+		},
+		{
 			label:  "$regex string",
 			input:  `{"a" : {"$regex" : "abc", "$options" : "im"}}`,
 			output: "0F0000000B610061626300696D0000",
@@ -176,6 +186,26 @@ func TestExtJSON(t *testing.T) {
 			label:  "$regex string, keys reversed",
 			input:  `{"a" : {"$options" : "im", "$regex" : "abc"}}`,
 			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, keys reversed, options unsorted",
+			input:  `{"a" : {"$options" : "mi", "$regex" : "abc"}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, keys reversed, illegal options",
+			input:  `{"a" : {"$options" : "i0", "$regex" : "abc"}}`,
+			errStr: "invalid regular expression option '0'",
+		},
+		{
+			label:  "$regex string, options unsorted",
+			input:  `{"a" : {"$regex" : "abc", "$options" : "im"}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, illegal options",
+			input:  `{"a" : {"$regex" : "abc", "$options" : "i0"}}`,
+			errStr: "invalid regular expression option '0'",
 		},
 		{
 			label:  "$regex document",
