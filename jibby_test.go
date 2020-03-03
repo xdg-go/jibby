@@ -126,21 +126,40 @@ func TestJSONTestSuite_Failing(t *testing.T) {
 	for _, f := range files {
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			var err error
-			var jibbyGot []byte
-			text, err := ioutil.ReadFile(filepath.Join(JSONTestSuite, f))
-			if err != nil {
-				t.Fatalf("error reading %s: %v", f, err)
-			}
-			jsonReader := bufio.NewReader(bytes.NewReader(text))
-			jib, err := NewDecoder(jsonReader)
-			for err == nil {
-				jibbyGot, err = jib.Decode(make([]byte, 0, 256))
-			}
-			if err == nil {
-				t.Fatalf("expected error but got none for '%s' ('%s')", string(text), hex.EncodeToString(jibbyGot))
-			}
+			testFailingConversion(t, filepath.Join(JSONTestSuite, f))
 		})
+	}
+}
+
+// TestJibbyTestSuite_Failing tests the seriot.ch corpus for
+// cases that must error.
+func TestJibbyTestSuite_Failing(t *testing.T) {
+	t.Parallel()
+
+	files := getTestFiles(t, JibbyTestSuite, "n", ".json")
+	for _, f := range files {
+		t.Run(f, func(t *testing.T) {
+			t.Parallel()
+			testFailingConversion(t, filepath.Join(JibbyTestSuite, f))
+		})
+	}
+}
+
+func testFailingConversion(t *testing.T, f string) {
+	t.Helper()
+	var err error
+	var jibbyGot []byte
+	text, err := ioutil.ReadFile(f)
+	if err != nil {
+		t.Fatalf("error reading %s: %v", f, err)
+	}
+	jsonReader := bufio.NewReader(bytes.NewReader(text))
+	jib, err := NewDecoder(jsonReader)
+	for err == nil {
+		jibbyGot, err = jib.Decode(make([]byte, 0, 256))
+	}
+	if err == nil {
+		t.Fatalf("expected error but got none for '%s' ('%s')", string(text), hex.EncodeToString(jibbyGot))
 	}
 }
 

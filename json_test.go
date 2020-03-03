@@ -17,6 +17,17 @@ func TestUnmarshal(t *testing.T) {
 	t.Parallel()
 
 	cases := []unmarshalTestCase{
+		// Empty
+		{
+			label:  "empty doc",
+			input:  `{}`,
+			output: "0500000000",
+		},
+		{
+			label:  "empty subdoc",
+			input:  `{"":{}}`,
+			output: "0c0000000300050000000000",
+		},
 		// True
 		{
 			label:  "true ok",
@@ -97,9 +108,24 @@ func TestUnmarshal(t *testing.T) {
 			errStr: "parse error: converting unicode escape",
 		},
 		{
+			label:  "invalid unicode escape",
+			input:  `{"a" : "\u+062"}`,
+			errStr: "parse error: converting unicode escape",
+		},
+		{
+			label:  "invalid unicode escape",
+			input:  `{"a" : "\u-062"}`,
+			errStr: "parse error: converting unicode escape",
+		},
+		{
 			label:  "unknown escape",
 			input:  `{"a" : "\U00e9"}`,
 			errStr: "parse error: unknown escape",
+		},
+		{
+			label:  "control character unescaped",
+			input:  "{\"a\" : \"\x07\"}",
+			errStr: "parse error: control characters",
 		},
 		// Int32
 		{
@@ -130,7 +156,42 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "bad int",
 			input:  `{"d" : 1234abc}`,
-			errStr: "parser error: int conversion",
+			errStr: "parse error: int conversion",
+		},
+		{
+			label:  "bad int with underscore",
+			input:  `{"d" : 123_456}`,
+			errStr: "invalid character",
+		},
+		{
+			label:  "bad int",
+			input:  `{"d" : -+1234}`,
+			errStr: "parse error: invalid character",
+		},
+		{
+			label:  "leading zero",
+			input:  `{"d" : 02}`,
+			errStr: "leading zero",
+		},
+		{
+			label:  "leading zero",
+			input:  `{"d" : -02}`,
+			errStr: "leading zero",
+		},
+		{
+			label:  "missing number",
+			input:  `{"d" : }`,
+			errStr: "invalid character",
+		},
+		{
+			label:  "missing number",
+			input:  `{"d" : , "e": 1}`,
+			errStr: "invalid character",
+		},
+		{
+			label:  "leading plus",
+			input:  `{"d" : +1}`,
+			errStr: "invalid character",
 		},
 		// Int64
 		{
@@ -155,9 +216,39 @@ func TestUnmarshal(t *testing.T) {
 			output: "10000000016400000000000000F0BF00",
 		},
 		{
+			label:  "0.0",
+			input:  `{"d" : 0.0}`,
+			output: "10000000016400000000000000000000",
+		},
+		{
+			label:  "0e0",
+			input:  `{"d" : 0e0}`,
+			output: "10000000016400000000000000000000",
+		},
+		{
+			label:  "2000000000000000000",
+			input:  `{"d" : 200000000000000000000 }`,
+			output: "10000000016400408cb5781daf254400",
+		},
+		{
+			label:  "bad float trailing decimal",
+			input:  `{"d" : 1.}`,
+			errStr: "parse error: decimal must be followed by digit",
+		},
+		{
+			label:  "bad float decimal without number",
+			input:  `{"d" : 1.e1}`,
+			errStr: "parse error: decimal must be followed by digit",
+		},
+		{
+			label:  "-.0",
+			input:  `{"d":-.0}`,
+			errStr: "parse error: invalid character",
+		},
+		{
 			label:  "bad float",
 			input:  `{"d" : -1.0a0}`,
-			errStr: "parser error: float conversion",
+			errStr: "parse error: float conversion",
 		},
 		{
 			label:  "number too long to parse",
@@ -255,12 +346,12 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "first array value invalid",
 			input:  `{ "a": [ 123abc, "hello"] }`,
-			errStr: "parser error",
+			errStr: "parse error",
 		},
 		{
 			label:  "second array value invalid",
 			input:  `{ "a": [ "hello", 123abc ] }`,
-			errStr: "parser error",
+			errStr: "parse error",
 		},
 	}
 

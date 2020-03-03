@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -383,6 +384,8 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, d.parseError(ch, "invalid value for $date")
 	}
 
 	// Must end with document terminator
@@ -395,11 +398,11 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 }
 
 // convertType starts after the opening quote of the `"$type"` key.  We need to
-// distinguish between Extended JSON $type or MongoDB $type query operator.  If
+// distinguish between Extended JSON $type or something else.  If
 // we can peek far enough, we can check with regular expresssions.
 
-var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s*:\s*"\d\d?"`)
-var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s*:\s*(\d+|"\w+"|\{)`)
+var dollarTypeExtJSONRe = regexp.MustCompile(`^\$type"\s*:\s*"\d\d?"`)
+var dollarTypeQueryOpRe = regexp.MustCompile(`^\$type"\s*:\s*(\d+|""|"...|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -590,8 +593,9 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 // } }, so if we see that "$regex" is followed by an object, we treat that as a
 // query.
 
-var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"`)
+var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"[^"]*"\s*,\s*"\$options"`)
 var dollarRegexQueryOpRe = regexp.MustCompile(`^\$regex"\s*:\s*\{`)
+var dollarRegexQueryElse = regexp.MustCompile(`^\$regex"\s*:\s*(\d+|"[^"]{0,7}"|"[^"]{8,}|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -615,6 +619,9 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 			isExtJSON = true
 			break
 		} else if dollarRegexQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		} else if dollarRegexQueryElse.Match(buf) {
 			// Signal not extended JSON with double nil.
 			return nil, nil
 		}
@@ -667,11 +674,20 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 		return nil, err
 	}
 
-	// Read options string
-	out, err = d.convertCString(out)
+	// Read options string into a buffer because it has to follow the regular
+	// expression pattern. Sort/validate the options.
+	opts := make([]byte, 0, 8)
+	opts, err = d.convertCString(opts)
 	if err != nil {
 		return nil, err
 	}
+	if len(opts) > 1 {
+		err = sortOptions(opts[0 : len(opts)-1])
+		if err != nil {
+			return nil, err
+		}
+	}
+	out = append(out, opts...)
 
 	// Must end with document terminator.
 	err = d.readObjectTerminator()
@@ -929,8 +945,9 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 // forms.  Unlike that function, the regular expressions here must look past
 // $option to find $regex to disambiguate.
 
-var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*"`)
-var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*\{`)
+var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[^"]*"\s*,\s*"\$regex"\s*:\s*"`)
+var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[^"]*"\s*,\s*"\$regex"\s*:\s*\{`)
+var dollarOptionsQueryElse = regexp.MustCompile(`^\$options"\s*:\s*(\d+|"[^"]{0,5}"|"[^"]{6,}|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -954,6 +971,9 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 			isExtJSON = true
 			break
 		} else if dollarOptionsQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		} else if dollarOptionsQueryElse.Match(buf) {
 			// Signal not extended JSON with double nil.
 			return nil, nil
 		}
@@ -982,11 +1002,17 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	}
 
 	// Read options string into a buffer because it has to follow the regular
-	// expression pattern.
+	// expression pattern. Sort/validate the options.
 	opts := make([]byte, 0, 8)
 	opts, err = d.convertCString(opts)
 	if err != nil {
 		return nil, err
+	}
+	if len(opts) > 1 {
+		err = sortOptions(opts[0 : len(opts)-1])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// $regex key must be next
@@ -1540,6 +1566,14 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
+			// sort/validate
+			if len(options) > 1 {
+				err = sortOptions(options[0 : len(options)-1])
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			// If we haven't seen the other key, we expect to see a separator.
 			if !sawPattern {
 				err = d.readCharAfterWS(',')
@@ -1645,4 +1679,16 @@ func parseISO8601toEpochMillis(data []byte) (int64, error) {
 	}
 
 	return t.Unix()*1e3 + int64(t.Nanosecond())/1e6, nil
+}
+
+func sortOptions(opts []byte) error {
+	sort.Slice(opts, func(i int, j int) bool { return opts[i] < opts[j] })
+	for i := range opts {
+		switch opts[i] {
+		case 'i', 'l', 'm', 's', 'u', 'x':
+		default:
+			return fmt.Errorf("parse error: invalid regular expression option '%c'", opts[i])
+		}
+	}
+	return nil
 }

@@ -13,6 +13,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 )
 
 // convertValue starts before any bytes of a value have been read.  It detects
@@ -62,9 +63,9 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-	default:
-		// This is either a number or an error, so we unread the byte, assume
-		// number and let that handler give us any error.  We can't write the
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		// This starts a number, so we unread the byte and let that handler give
+		// us any error.  We can't write the
 		// type byte until the number type is determined (int64, int32, double),
 		// so we pass in the type byte position.
 		_ = d.json.UnreadByte()
@@ -72,6 +73,8 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, d.parseError(ch, "invalid character")
 	}
 
 	return out, nil
@@ -102,12 +105,13 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 	switch ch {
 	case '}':
 		// Empty object
+		overwriteTypeByte(out, outerTypeBytePos, bsonDocument)
 		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
 		// If ExtJSON enabled and `handleExtJSON` returns a buffer, then this
 		// value was extended JSON and the value has been consumed.
-		if d.extJSONAllowed {
+		if d.extJSONAllowed && outerTypeBytePos != topContainer {
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
 				return nil, err
@@ -363,8 +367,7 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 	}
 
 	if isFloat {
-		overwriteTypeByte(out, typeBytePos, bsonDouble)
-		out, err = d.convertFloat(out, buf)
+		out, err = d.convertFloat(out, typeBytePos, buf)
 		if err != nil {
 			return nil, err
 		}
@@ -383,12 +386,13 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 
 // convertFloat converts the floating-point number in the buffer.  It does not
 // consume any of the input.
-func (d *Decoder) convertFloat(out []byte, buf []byte) ([]byte, error) {
+func (d *Decoder) convertFloat(out []byte, typeBytePos int, buf []byte) ([]byte, error) {
 	n, err := strconv.ParseFloat(string(buf), 64)
 	if err != nil {
-		return nil, fmt.Errorf("parser error: float conversion: %v", err)
+		return nil, fmt.Errorf("parse error: float conversion: %v", err)
 	}
 
+	overwriteTypeByte(out, typeBytePos, bsonDouble)
 	var x [8]byte
 	xs := x[0:8]
 	binary.LittleEndian.PutUint64(xs, math.Float64bits(n))
@@ -401,7 +405,11 @@ func (d *Decoder) convertFloat(out []byte, buf []byte) ([]byte, error) {
 func (d *Decoder) convertInt(out []byte, typeBytePos int, buf []byte) ([]byte, error) {
 	n, err := strconv.ParseInt(string(buf), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("parser error: int conversion: %v", err)
+		if strings.Contains(err.Error(), strconv.ErrRange.Error()) {
+			// Doesn't fit in int64, so treat as float
+			return d.convertFloat(out, typeBytePos, buf)
+		}
+		return nil, fmt.Errorf("parse error: int conversion: %v", err)
 	}
 
 	if n < math.MinInt32 || n > math.MaxInt32 {
@@ -493,7 +501,7 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 						break INNER
 					}
 					// convert next 4 bytes to rune and append it as UTF-8
-					n, err := strconv.ParseInt(string(buf[i+2:i+6]), 16, 32)
+					n, err := strconv.ParseUint(string(buf[i+2:i+6]), 16, 32)
 					if err != nil {
 						return nil, fmt.Errorf("parse error: converting unicode escape: %v", err)
 					}
@@ -508,6 +516,9 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 				terminated = true
 				break INNER
 			default:
+				if buf[i] < ' ' {
+					return nil, fmt.Errorf("parse error: control characters not allowed in strings")
+				}
 				out = append(out, buf[i])
 			}
 		}

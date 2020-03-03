@@ -73,6 +73,16 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary, empty",
+			input:  `{"x" : { "$binary" : {"base64" : "", "subType" : "03"}}}`,
+			output: "0D000000057800000000000300",
+		},
+		{
+			label:  "$binary, subtype too long",
+			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "123"}}}`,
+			errStr: "exceeds expected length 2",
+		},
+		{
 			label:  "$binary, single type digit",
 			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "3"}}}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
@@ -128,6 +138,26 @@ func TestExtJSON(t *testing.T) {
 			output: "100000001161002A00000015CD5B0700",
 		},
 		{
+			label:  "$timestamp, bad t number",
+			input:  `{"":{"$timestamp":{"t":00,"i":0}}}`,
+			errStr: "leading zeros not allowed",
+		},
+		{
+			label:  "$timestamp, bad i number",
+			input:  `{"":{"$timestamp":{"t":0,"i":00}}}`,
+			errStr: "leading zeros not allowed",
+		},
+		{
+			label:  "$timestamp, bad i number 2",
+			input:  `{"":{"$timestamp":{"t":0,"i":a}}}`,
+			errStr: "invalid character in number",
+		},
+		{
+			label:  "$timestamp, missing i number",
+			input:  `{"":{"$timestamp":{"t":0,"i":}}}`,
+			errStr: "number not found",
+		},
+		{
 			label:  "$regularExpression",
 			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "im"}}}`,
 			output: "0F0000000B610061626300696D0000",
@@ -138,6 +168,16 @@ func TestExtJSON(t *testing.T) {
 			output: "0F0000000B610061626300696D0000",
 		},
 		{
+			label:  "$regularExpression, options unsorted",
+			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "mi"}}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regularExpression, illegal options",
+			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "i0"}}}`,
+			errStr: "invalid regular expression option '0'",
+		},
+		{
 			label:  "$regex string",
 			input:  `{"a" : {"$regex" : "abc", "$options" : "im"}}`,
 			output: "0F0000000B610061626300696D0000",
@@ -146,6 +186,26 @@ func TestExtJSON(t *testing.T) {
 			label:  "$regex string, keys reversed",
 			input:  `{"a" : {"$options" : "im", "$regex" : "abc"}}`,
 			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, keys reversed, options unsorted",
+			input:  `{"a" : {"$options" : "mi", "$regex" : "abc"}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, keys reversed, illegal options",
+			input:  `{"a" : {"$options" : "i0", "$regex" : "abc"}}`,
+			errStr: "invalid regular expression option '0'",
+		},
+		{
+			label:  "$regex string, options unsorted",
+			input:  `{"a" : {"$regex" : "abc", "$options" : "im"}}`,
+			output: "0F0000000B610061626300696D0000",
+		},
+		{
+			label:  "$regex string, illegal options",
+			input:  `{"a" : {"$regex" : "abc", "$options" : "i0"}}`,
+			errStr: "invalid regular expression option '0'",
 		},
 		{
 			label:  "$regex document",
@@ -168,6 +228,16 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a": {"$dbPointer": {"$id": {"$oid": "56e1fc72e0c917e9c4714161"}, "$ref": "b"}}}`,
 		},
 		{
+			label:  "$dbPointer, invalid key",
+			input:  `{"":{"$dbPointer":{"abc":""}}}`,
+			errStr: `invalid key for $dbPointer`,
+		},
+		{
+			label:  "$dbPointer, short key",
+			input:  `{"":{"$dbPointer":{"":""}}}`,
+			errStr: `string falls short of expected length`,
+		},
+		{
 			label:  "$date, numberLong",
 			output: "10000000096100000000000000000000",
 			input:  `{"a" : {"$date" : {"$numberLong" : "0"}}}`,
@@ -176,6 +246,21 @@ func TestExtJSON(t *testing.T) {
 			label:  "$date, ISO 8601",
 			output: "10000000096100000000000000000000",
 			input:  `{"a" : {"$date" : "1970-01-01T00:00:00Z"}}`,
+		},
+		{
+			label:  "$date, ISO 8601 2",
+			output: "1000000009610000a24a040000000000",
+			input:  `{"a":{"$date":"1970-01-01T20:00:00Z"}}`,
+		},
+		{
+			label:  "$date, invalid object",
+			input:  `{"a" : {"$date" : {"00000" : "0"}}}`,
+			errStr: `expected "$numberLong"`,
+		},
+		{
+			label:  "$date, invalid parse",
+			input:  `{"":{"$date":}}}`,
+			errStr: `invalid value for $date`,
 		},
 		{
 			label:  "$maxKey",
@@ -191,6 +276,26 @@ func TestExtJSON(t *testing.T) {
 			label:  "$undefined",
 			input:  `{"a" : {"$undefined" : true}}`,
 			output: "0800000006610000",
+		},
+		{
+			label:  "top level not extended JSON",
+			input:  `{"$symbol": "abc"}`,
+			output: "16000000022473796d626f6c00040000006162630000",
+		},
+		{
+			label:  "$type not extended JSON nor query",
+			input:  `{"":{"$type":""}}`,
+			output: "180000000300110000000224747970650001000000000000",
+		},
+		{
+			label:  "$options not extended JSON nor query",
+			input:  `{"":{"$options":"","000" : ""}}`,
+			output: "2500000003001e00000002246f7074696f6e73000100000000023030300001000000000000",
+		},
+		{
+			label:  "$regex not extended JSON nor query",
+			input:  `{"":{"$regex":"","options" : "im"}}`,
+			output: "2900000003002200000002247265676578000100000000026f7074696f6e730003000000696d000000",
 		},
 	}
 
