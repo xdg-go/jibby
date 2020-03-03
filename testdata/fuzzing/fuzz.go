@@ -19,7 +19,7 @@ var ErrPanicked = errors.New("Panicked")
 var ErrIgnore = errors.New("Ignore")
 
 func FuzzJSON(data []byte) int {
-	if shouldSkip(data) {
+	if shouldSkip(data, false) {
 		return 0
 	}
 
@@ -52,7 +52,7 @@ func FuzzJSON(data []byte) int {
 }
 
 func FuzzXJSON(data []byte) int {
-	if shouldSkip(data) {
+	if shouldSkip(data, true) {
 		return 0
 	}
 
@@ -131,8 +131,10 @@ func trim(s string) string {
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 var objectRE = regexp.MustCompile(`^\s*\{`)
+var dollarCodeRE = regexp.MustCompile(`\{\s*"\$code"\s*:`)
+var longSubtypeRE = regexp.MustCompile(`("\$type"\s*:\s*"...|"subType"\s*:\s*"...)`)
 
-func shouldSkip(data []byte) bool {
+func shouldSkip(data []byte, extjson bool) bool {
 	if len(data) > 2 && bytes.Equal(data[0:3], utf8BOM) {
 		// encoding/json doens't support UTF-8 BOM
 		return true
@@ -142,6 +144,17 @@ func shouldSkip(data []byte) bool {
 		// jibby only supports top level object.  Ignore array framing for fuzz
 		// testing.
 		return true
+	}
+
+	if extjson {
+		if dollarCodeRE.Match(data) {
+			// GODRIVER-1502: driver mishandles $code validation
+			return true
+		}
+		if longSubtypeRE.Match(data) {
+			// GODRIVER-1505: driver allows long binary subtypes
+			return true
+		}
 	}
 
 	return false
