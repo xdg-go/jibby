@@ -56,13 +56,13 @@ func FuzzXJSON(data []byte) int {
 		return 0
 	}
 
+	jibbyOut := make([]byte, 0)
+	jibbyOut, jibbyErr := jibby.UnmarshalExtJSON(data, jibbyOut)
+
 	driverOut, driverErr := unmarshalWithDriver(data)
 	if driverErr == ErrPanicked {
 		return 0
 	}
-
-	jibbyOut := make([]byte, 0)
-	jibbyOut, jibbyErr := jibby.UnmarshalExtJSON(data, jibbyOut)
 
 	if jibbyErr != nil && driverErr == nil {
 		if isDriverFalseNegative(jibbyErr) {
@@ -132,8 +132,15 @@ func trim(s string) string {
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 var objectRE = regexp.MustCompile(`^\s*\{`)
 var dollarCodeRE = regexp.MustCompile(`\{\s*"\$code"\s*:`)
-var longSubtypeRE = regexp.MustCompile(`("\$type"\s*:\s*"...|"subType"\s*:\s*"...)`)
+var dollarRegexRE = regexp.MustCompile(`\{\s*"\$regex"\s*:`)
+var dollarTimestampRE = regexp.MustCompile(`\{\s*"\$timestamp"\s*:`)
+var dollarOptionsRE = regexp.MustCompile(`\{\s*"\$options"\s*:`)
+var dollarDoubleNaNRE = regexp.MustCompile(`\{\s*"\$numberDouble"\s*:\s*"NaN"`)
+var longSubtypeRE = regexp.MustCompile(`("(?s)\$type"\s*:\s*"...|(?s)"subType"\s*:\s*"...)`)
 var topLevelExtJSONRE = regexp.MustCompile(`^\s*\{\s*"\$\w+"`)
+var escapedQuoteRE = regexp.MustCompile(`"[^"]*\\'[^"]*"`)
+var badISO8601ParseRE = regexp.MustCompile(`\{\s*"\$date"\s*:\s*"\d{4}-\d{2}-\d{2}T\d:\d{2}:\d{2}`) // ignore time zone offset
+var badDateParseRE = regexp.MustCompile(`\{\s*"\$date"\s*:\s*-?\d+(\s|,|\}|\])`)
 
 func shouldSkip(data []byte, extjson bool) bool {
 	if len(data) > 2 && bytes.Equal(data[0:3], utf8BOM) {
@@ -156,9 +163,33 @@ func shouldSkip(data []byte, extjson bool) bool {
 			// GODRIVER-1505: driver allows long binary subtypes
 			return true
 		}
+		if dollarTimestampRE.Match(data) {
+			// GODRIVER-1506: driver doesn't limit 't'/'i' to uint32
+			return true
+		}
 		if topLevelExtJSONRE.Match(data) {
 			// GODRIVER-1504: driver tries to unmarshal top-level $-prefixed
 			// keys as ExtJSON
+			return true
+		}
+		if dollarRegexRE.Match(data) || dollarOptionsRE.Match(data) {
+			// GODRIVER-1512: driver doesn't interpret $regex
+			return true
+		}
+		if escapedQuoteRE.Match(data) {
+			// GODRIVER-1513: driver allows escaping single-quote
+			return true
+		}
+		if badISO8601ParseRE.Match(data) {
+			// GODRIVER-1514: driver parses single-digit hours
+			return true
+		}
+		if dollarDoubleNaNRE.Match(data) {
+			// GODRIVER-1515: driver uses NaN with payload
+			return true
+		}
+		if badDateParseRE.Match(data) {
+			// GODRIVER-1517: driver parses integer literals
 			return true
 		}
 	}
