@@ -383,6 +383,8 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, d.parseError(ch, "invalid value for $date")
 	}
 
 	// Must end with document terminator
