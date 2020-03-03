@@ -222,6 +222,11 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"":{"$options":"","000" : ""}}`,
 			output: "2500000003001e00000002246f7074696f6e73000100000000023030300001000000000000",
 		},
+		{
+			label:  "$regex not extended JSON nor query",
+			input:  `{"":{"$regex":"","options" : "im"}}`,
+			output: "2900000003002200000002247265676578000100000000026f7074696f6e730003000000696d000000",
+		},
 	}
 
 	testWithUnmarshal(t, cases, true)

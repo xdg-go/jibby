@@ -590,8 +590,9 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 // } }, so if we see that "$regex" is followed by an object, we treat that as a
 // query.
 
-var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"`)
+var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"[^"]*"\s*,\s*"\$options"`)
 var dollarRegexQueryOpRe = regexp.MustCompile(`^\$regex"\s*:\s*\{`)
+var dollarRegexQueryElse = regexp.MustCompile(`^\$regex"\s*:\s*(\d+|"[^"]{0,7}"|"[^"]{8,}|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
@@ -615,6 +616,9 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 			isExtJSON = true
 			break
 		} else if dollarRegexQueryOpRe.Match(buf) {
+			// Signal not extended JSON with double nil.
+			return nil, nil
+		} else if dollarRegexQueryElse.Match(buf) {
 			// Signal not extended JSON with double nil.
 			return nil, nil
 		}
@@ -931,7 +935,7 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 
 var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*"`)
 var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[a-z]*"\s*,\s*"\$regex"\s*:\s*\{`)
-var dollarOptionsQueryElse = regexp.MustCompile(`^\$options"\s*:\s*(\d+|".{0,5}"|".....|\{|\[|t|f|n)`)
+var dollarOptionsQueryElse = regexp.MustCompile(`^\$options"\s*:\s*(\d+|"[^"]{0,5}"|"[^"]{6,}|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
