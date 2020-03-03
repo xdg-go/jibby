@@ -42,7 +42,7 @@ func ExampleDecoder_Decode() {
 	json := `{"a": 1, "b": "foo"}`
 	bson := make([]byte, 0, 256)
 
-	jsonReader := bufio.NewReader(bytes.NewReader([]byte(json)))
+	jsonReader := bufio.NewReaderSize(bytes.NewReader([]byte(json)), 8192)
 	jib, err := jibby.NewDecoder(jsonReader)
 	if err != nil {
 		log.Fatal(err)
