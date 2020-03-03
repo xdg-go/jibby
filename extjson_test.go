@@ -178,6 +178,16 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a": {"$dbPointer": {"$id": {"$oid": "56e1fc72e0c917e9c4714161"}, "$ref": "b"}}}`,
 		},
 		{
+			label:  "$dbPointer, invalid key",
+			input:  `{"":{"$dbPointer":{"abc":""}}}`,
+			errStr: `invalid key for $dbPointer`,
+		},
+		{
+			label:  "$dbPointer, short key",
+			input:  `{"":{"$dbPointer":{"":""}}}`,
+			errStr: `string falls short of expected length`,
+		},
+		{
 			label:  "$date, numberLong",
 			output: "10000000096100000000000000000000",
 			input:  `{"a" : {"$date" : {"$numberLong" : "0"}}}`,

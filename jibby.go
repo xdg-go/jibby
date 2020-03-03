@@ -412,6 +412,8 @@ func (d *Decoder) peekBoundedQuote(minLen, maxLen int) ([]byte, error) {
 		ch := buf[len(buf)-1]
 		d.json.Discard(len(buf))
 		return nil, d.parseError(ch, fmt.Sprintf("string exceeds expected length %d", maxLen-1))
+	} else if quotePos < minLen-1 {
+		return nil, d.parseError(buf[0], fmt.Sprintf("string falls short of expected length %d", minLen-1))
 	}
 
 	return buf[0:quotePos], nil
