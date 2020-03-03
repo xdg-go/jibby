@@ -17,6 +17,17 @@ func TestUnmarshal(t *testing.T) {
 	t.Parallel()
 
 	cases := []unmarshalTestCase{
+		// Empty
+		{
+			label:  "empty doc",
+			input:  `{}`,
+			output: "0500000000",
+		},
+		{
+			label:  "empty subdoc",
+			input:  `{"":{}}`,
+			output: "0c0000000300050000000000",
+		},
 		// True
 		{
 			label:  "true ok",

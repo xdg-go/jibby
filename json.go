@@ -105,6 +105,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 	switch ch {
 	case '}':
 		// Empty object
+		overwriteTypeByte(out, outerTypeBytePos, bsonDocument)
 		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
