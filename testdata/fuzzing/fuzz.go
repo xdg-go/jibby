@@ -18,12 +18,32 @@ import (
 var ErrPanicked = errors.New("Panicked")
 var ErrIgnore = errors.New("Ignore")
 
+func FuzzCrash(data []byte) int {
+	jibbyOut := make([]byte, 0)
+	_, jibbyErr := jibby.Unmarshal(data, jibbyOut)
+
+	if jibbyErr == nil {
+		return 1
+	}
+
+	return 0
+}
+
+func FuzzCrashDriver(data []byte) int {
+	var driverOut bson.Raw
+	driverErr := bson.UnmarshalExtJSON(data, false, &driverOut)
+
+	if driverErr == nil {
+		return 1
+	}
+
+	return 0
+}
+
 func FuzzJSON(data []byte) int {
 	if shouldSkip(data, false) {
 		return 0
 	}
-
-	score := 0
 
 	jsonErr := unmarshalWithJson(data)
 	if jsonErr == ErrIgnore || jsonErr == ErrPanicked {
@@ -43,12 +63,11 @@ func FuzzJSON(data []byte) int {
 		panic(fmt.Sprintf("jibby succeeds when json errors: %v", jsonErr))
 	}
 
-	// Increase score if parse sucessful
 	if jibbyErr == nil {
-		score = 1
+		return 1
 	}
 
-	return score
+	return 0
 }
 
 func FuzzXJSON(data []byte) int {
