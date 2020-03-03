@@ -5,6 +5,7 @@ if [[ ! -d "corpus" ]]; then
     mkdir corpus
     cp ../JSONTestSuite/test_parsing/* corpus
     cp ../jibbytests/* corpus
+    cp seed_corpus/* corpus
 else
     echo "Corpus already exists..."
 fi
