@@ -395,11 +395,11 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 }
 
 // convertType starts after the opening quote of the `"$type"` key.  We need to
-// distinguish between Extended JSON $type or MongoDB $type query operator.  If
+// distinguish between Extended JSON $type or something else.  If
 // we can peek far enough, we can check with regular expresssions.
 
-var dollarTypeExtJSONRe = regexp.MustCompile(`\$type"\s*:\s*"\d\d?"`)
-var dollarTypeQueryOpRe = regexp.MustCompile(`\$type"\s*:\s*(\d+|"\w+"|\{)`)
+var dollarTypeExtJSONRe = regexp.MustCompile(`^\$type"\s*:\s*"\d\d?"`)
+var dollarTypeQueryOpRe = regexp.MustCompile(`^\$type"\s*:\s*(\d+|""|"...|\{|\[|t|f|n)`)
 
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// Peek ahead successively longer; shouldn't be necessary but
