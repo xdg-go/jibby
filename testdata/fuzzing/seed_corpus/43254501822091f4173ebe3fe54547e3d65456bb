@@ -1,0 +1,1 @@
+{"a" : {"$date" : {"$numberLong" : "0"}}}
