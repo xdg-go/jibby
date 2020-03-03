@@ -138,6 +138,26 @@ func TestExtJSON(t *testing.T) {
 			output: "100000001161002A00000015CD5B0700",
 		},
 		{
+			label:  "$timestamp, bad t number",
+			input:  `{"":{"$timestamp":{"t":00,"i":0}}}`,
+			errStr: "leading zeros not allowed",
+		},
+		{
+			label:  "$timestamp, bad i number",
+			input:  `{"":{"$timestamp":{"t":0,"i":00}}}`,
+			errStr: "leading zeros not allowed",
+		},
+		{
+			label:  "$timestamp, bad i number 2",
+			input:  `{"":{"$timestamp":{"t":0,"i":a}}}`,
+			errStr: "invalid character in number",
+		},
+		{
+			label:  "$timestamp, missing i number",
+			input:  `{"":{"$timestamp":{"t":0,"i":}}}`,
+			errStr: "number not found",
+		},
+		{
 			label:  "$regularExpression",
 			input:  `{"a" : {"$regularExpression" : { "pattern": "abc", "options" : "im"}}}`,
 			output: "0F0000000B610061626300696D0000",
@@ -196,6 +216,11 @@ func TestExtJSON(t *testing.T) {
 			label:  "$date, ISO 8601",
 			output: "10000000096100000000000000000000",
 			input:  `{"a" : {"$date" : "1970-01-01T00:00:00Z"}}`,
+		},
+		{
+			label:  "$date, ISO 8601 2",
+			output: "1000000009610000a24a040000000000",
+			input:  `{"a":{"$date":"1970-01-01T20:00:00Z"}}`,
 		},
 		{
 			label:  "$date, invalid object",

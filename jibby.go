@@ -327,7 +327,7 @@ LOOP:
 
 	// Check for number
 	if num[0] < '0' || num[0] > '9' {
-		return nil, false, d.parseError(buf[i], "invalid character in number")
+		return nil, false, d.parseError(buf[0], "invalid character in number")
 	}
 
 	if num[0] == '0' && len(num) > 1 && num[1] != '.' && num[1] != 'e' && num[1] != 'E' {
@@ -361,6 +361,24 @@ LOOP:
 			terminated = true
 			break LOOP
 		}
+	}
+
+	// Do some validation before ParseInt/ParseFloat for basic sanity and for
+	// things that ParseInt/ParseFloat are liberal about.
+	num := buf[0:i]
+
+	// Check for empty string
+	if len(num) == 0 {
+		return nil, d.parseError(buf[0], "number not found")
+	}
+
+	// Check for number
+	if num[0] < '0' || num[0] > '9' {
+		return nil, d.parseError(buf[0], "invalid character in number")
+	}
+
+	if num[0] == '0' && len(num) > 1 {
+		return nil, d.parseError(buf[0], "leading zeros not allowed")
 	}
 
 	if !terminated {
