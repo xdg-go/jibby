@@ -78,6 +78,11 @@ func TestExtJSON(t *testing.T) {
 			output: "0D000000057800000000000300",
 		},
 		{
+			label:  "$binary subtype 0x02",
+			input:  `{"x" : { "$binary" : {"base64" : "//8=", "subType" : "02"}}}`,
+			output: "13000000057800060000000202000000FFFF00",
+		},
+		{
 			label:  "$binary, subtype too long",
 			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "123"}}}`,
 			errStr: "exceeds expected length 2",
@@ -93,6 +98,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary subtype 0x02, keys reversed",
+			input:  `{"x" : { "$binary" : {"subType" : "02", "base64" : "//8="}}}`,
+			output: "13000000057800060000000202000000FFFF00",
+		},
+		{
 			label:  "$binary legacy",
 			input:  `{"x" : { "$binary" : "c//SZESzTGmQ6OfR38A11A==", "$type" : "03"}}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
@@ -103,6 +113,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary legacy, subtype 0x02",
+			input:  `{"x" : { "$binary" : "//8=", "$type" : "02"}}`,
+			output: "13000000057800060000000202000000FFFF00",
+		},
+		{
 			label:  "$binary legacy, keys reversed",
 			input:  `{"x" : { "$type" : "03", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
@@ -111,6 +126,11 @@ func TestExtJSON(t *testing.T) {
 			label:  "$binary legacy, keys reversed, single type digit",
 			input:  `{"x" : { "$type" : "03", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$binary legacy, subtype 0x02, keys reversed",
+			input:  `{"x" : { "$type" : "02", "$binary" : "//8="}}`,
+			output: "13000000057800060000000202000000FFFF00",
 		},
 		{
 			label:  "$code",

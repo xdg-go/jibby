@@ -444,6 +444,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	out = append(out, emptyLength...)
 	subTypeBytePos := len(out)
 	out = append(out, emptyType)
+	var subType byte
 
 	// Discard $type key and closing quote
 	_, _ = d.json.Discard(6)
@@ -459,7 +460,8 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	}
 
 	// Read type bytes, decode, and write them
-	out, err = d.convertBinarySubType(out, subTypeBytePos)
+	out, subType, err = d.convertBinarySubType(out, subTypeBytePos)
+
 	if err != nil {
 		return nil, err
 	}
@@ -489,6 +491,22 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// write length of binary payload (added length minux 5 bytes for
 	// length+type)
 	binLength := len(out) - lengthPos - 5
+
+	// For binary subtype 2, the byte payload must have the length repeated,
+	// so we need to rearrange the output data.  We don't do this by default
+	// so that the common case avoids copies.
+	if subType == 2 {
+		// Extend out by size of length bytes, then slide data down.
+		out = append(out, emptyLength...)
+		payloadPos := lengthPos + 5
+		for i := len(out) - 5; i >= payloadPos; i-- {
+			out[i+4] = out[i]
+		}
+		// Write length to start of payload and increment outer length
+		overwriteLength(out, payloadPos, binLength)
+		binLength += 4
+	}
+
 	overwriteLength(out, lengthPos, binLength)
 
 	// Must end with document terminator
@@ -502,10 +520,10 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 
 // convertBinarySubType starts after the opening quote of the string holding hex
 // bytes of the value.
-func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, error) {
+func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, byte, error) {
 	subTypeBytes, err := d.peekBoundedQuote(2, 3)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	// Go requires even digits to decode hex.
 	normalizedSubType := subTypeBytes
@@ -516,12 +534,12 @@ func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, 
 	xs := x[0:1]
 	_, err = hex.Decode(xs, normalizedSubType)
 	if err != nil {
-		return nil, d.parseError(subTypeBytes[0], fmt.Sprintf("error parsing subtype: %v", err))
+		return nil, 0, d.parseError(subTypeBytes[0], fmt.Sprintf("error parsing subtype: %v", err))
 	}
 	overwriteTypeByte(out, subTypeBytePos, xs[0])
 	_, _ = d.json.Discard(len(subTypeBytes) + 1)
 
-	return out, nil
+	return out, xs[0], nil
 }
 
 // convertScope starts after the `"$scope"` key.  Having a leading $scope means
@@ -751,6 +769,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 	// Need to see exactly 2 keys, subType and base64, in any order.
 	var sawBase64 bool
 	var sawSubType bool
+	var subType byte
 	for {
 		// Read the opening quote of the key and peek the key.
 		err := d.readQuoteStart()
@@ -777,7 +796,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			out, err = d.convertBinarySubType(out, subTypeBytePos)
+			out, subType, err = d.convertBinarySubType(out, subTypeBytePos)
 			if err != nil {
 				return nil, err
 			}
@@ -824,6 +843,22 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 	// write length of binary payload (added length of the output minux 5 bytes
 	// for length+type)
 	binLength := len(out) - lengthPos - 5
+
+	// For binary subtype 2, the byte payload must have the length repeated,
+	// so we need to rearrange the output data.  We don't do this by default
+	// so that the common case avoids copies.
+	if subType == 2 {
+		// Extend out by size of length bytes, then slide data down.
+		out = append(out, emptyLength...)
+		payloadPos := lengthPos + 5
+		for i := len(out) - 5; i >= payloadPos; i-- {
+			out[i+4] = out[i]
+		}
+		// Write length to start of payload and increment outer length
+		overwriteLength(out, payloadPos, binLength)
+		binLength += 4
+	}
+
 	overwriteLength(out, lengthPos, binLength)
 
 	// Must end with document terminator
@@ -843,6 +878,7 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	out = append(out, emptyLength...)
 	subTypeBytePos := len(out)
 	out = append(out, emptyType)
+	var subType byte
 
 	// Read the payload
 	out, err := d.convertBase64(out)
@@ -875,7 +911,8 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err = d.convertBinarySubType(out, subTypeBytePos)
+
+	out, subType, err = d.convertBinarySubType(out, subTypeBytePos)
 	if err != nil {
 		return nil, err
 	}
@@ -883,6 +920,22 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	// write length of binary payload (added length of the output minux 5 bytes
 	// for length+type)
 	binLength := len(out) - lengthPos - 5
+
+	// For binary subtype 2, the byte payload must have the length repeated,
+	// so we need to rearrange the output data.  We don't do this by default
+	// so that the common case avoids copies.
+	if subType == 2 {
+		// Extend out by size of length bytes, then slide data down.
+		out = append(out, emptyLength...)
+		payloadPos := lengthPos + 5
+		for i := len(out) - 5; i >= payloadPos; i-- {
+			out[i+4] = out[i]
+		}
+		// Write length to start of payload and increment outer length
+		overwriteLength(out, payloadPos, binLength)
+		binLength += 4
+	}
+
 	overwriteLength(out, lengthPos, binLength)
 
 	return out, nil
