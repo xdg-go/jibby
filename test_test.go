@@ -94,10 +94,11 @@ func getTestFiles(t *testing.T, dir, prefix, suffix string) []string {
 func convertWithJibby(input []byte) ([]byte, error) {
 	jsonReader := bufio.NewReader(bytes.NewReader(input))
 	jib, err := NewDecoder(jsonReader)
-	jib.ExtJSON(true)
 	if err != nil {
 		return nil, err
 	}
+	jib.ExtJSON(true)
+	jib.MaxDepth(1000)
 	return jib.Decode(make([]byte, 0, 256))
 }
 

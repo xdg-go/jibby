@@ -27,9 +27,10 @@ func TestJSONTestSuite_Passing(t *testing.T) {
 	t.Parallel()
 	files := getTestFiles(t, JSONTestSuite, "y", ".json")
 	for _, f := range files {
+		path := filepath.Join(JSONTestSuite, f)
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			testPassingConversion(t, filepath.Join(JSONTestSuite, f), nil)
+			testPassingConversion(t, path, nil)
 		})
 	}
 }
@@ -41,9 +42,10 @@ func TestJibbyTestSuite_Passing(t *testing.T) {
 	t.Parallel()
 	files := getTestFiles(t, JibbyTestSuite, "y", ".json")
 	for _, f := range files {
+		path := filepath.Join(JibbyTestSuite, f)
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			testPassingConversion(t, filepath.Join(JibbyTestSuite, f), nil)
+			testPassingConversion(t, path, nil)
 		})
 	}
 }
@@ -83,9 +85,10 @@ func TestJSONTestSuite_ImplDefined(t *testing.T) {
 		if unsupportedTests[f] {
 			continue
 		}
+		path := filepath.Join(JSONTestSuite, f)
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			testPassingConversion(t, filepath.Join(JSONTestSuite, f), allowedErrors)
+			testPassingConversion(t, path, allowedErrors)
 		})
 	}
 }
@@ -124,9 +127,10 @@ func TestJSONTestSuite_Failing(t *testing.T) {
 
 	files := getTestFiles(t, JSONTestSuite, "n", ".json")
 	for _, f := range files {
+		path := filepath.Join(JSONTestSuite, f)
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			testFailingConversion(t, filepath.Join(JSONTestSuite, f))
+			testFailingConversion(t, path)
 		})
 	}
 }
@@ -138,9 +142,10 @@ func TestJibbyTestSuite_Failing(t *testing.T) {
 
 	files := getTestFiles(t, JibbyTestSuite, "n", ".json")
 	for _, f := range files {
+		path := filepath.Join(JibbyTestSuite, f)
 		t.Run(f, func(t *testing.T) {
 			t.Parallel()
-			testFailingConversion(t, filepath.Join(JibbyTestSuite, f))
+			testFailingConversion(t, path)
 		})
 	}
 }

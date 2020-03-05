@@ -233,7 +233,7 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	xs := x[0:12]
 	_, err = hex.Decode(xs, buf[0:24])
 	if err != nil {
-		return nil, fmt.Errorf("parser error: objectID conversion: %v", err)
+		return nil, fmt.Errorf("parse error: objectID conversion: %v", err)
 	}
 	out = append(out, xs...)
 
@@ -1239,7 +1239,7 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 
 	n, err := strconv.ParseInt(string(buf), 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("parser error: int conversion: %v", err)
+		return nil, fmt.Errorf("parse error: int conversion: %v", err)
 	}
 	var x [4]byte
 	xs := x[0:4]
@@ -1419,7 +1419,7 @@ func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 
 	n, err := strconv.ParseInt(string(buf), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("parser error: int conversion: %v", err)
+		return nil, fmt.Errorf("parse error: int conversion: %v", err)
 	}
 	var x [8]byte
 	xs := x[0:8]
@@ -1459,7 +1459,7 @@ func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 
 	n, err := strconv.ParseFloat(string(buf), 64)
 	if err != nil {
-		return nil, fmt.Errorf("parser error: float conversion: %v", err)
+		return nil, fmt.Errorf("parse error: float conversion: %v", err)
 	}
 
 	var x [8]byte
@@ -1506,7 +1506,7 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 
 	d128, err := primitive.ParseDecimal128(string(buf))
 	if err != nil {
-		return nil, fmt.Errorf("parser error: decimal128 conversion: %v", err)
+		return nil, fmt.Errorf("parse error: decimal128 conversion: %v", err)
 	}
 
 	hi, lo := d128.GetBytes()
