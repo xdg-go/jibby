@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -62,8 +64,8 @@ import (
 // functions are responsible for consuming the full extended JSON object,
 // including the closing terminator.
 func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
-	// Peek ahead for longest possible extjson key plus closing quote.
-	buf, err := d.json.Peek(19)
+	// Peek ahead for longest possible extjson key plus surrounding quotes.
+	buf, err := d.json.Peek(20)
 	if err != nil {
 		// May have peeked to end of input, so EOF is OK.
 		if err != io.EOF {
@@ -71,7 +73,10 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 		}
 	}
 
-	// Common case: not extended JSON.
+	// Skip past opening quote (which must have existed to get to handleExtJSON)
+	buf = buf[1:]
+
+	// Common case: If $ doesn't follow opening quote, then not extended JSON.
 	if len(buf) > 0 && buf[0] != '$' {
 		return nil, nil
 	}
@@ -85,14 +90,14 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	key := buf[0:quotePos]
 
 	// When we find a key, we can write a type byte and discard from the input
-	// buffer the length of that key plus one for the closing quote.  In
+	// buffer the length of that key plus two for the surrounding quotes.  In
 	// ambiguous cases, we can't assign a type or discard, so we defer that
 	// to a corresponding subroutine.
 	switch len(key) {
 	case 4: // $oid
 		if bytes.Equal(key, jsonOID) {
 			overwriteTypeByte(out, typeBytePos, bsonObjectID)
-			_, _ = d.json.Discard(5)
+			_, _ = d.json.Discard(6)
 			return d.convertOID(out)
 		}
 		return nil, nil
@@ -100,11 +105,11 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 		if bytes.Equal(key, jsonCode) {
 			// Still don't know if this is code or code w/scope, so can't
 			// assign type yet, but we can consume the key.
-			_, _ = d.json.Discard(6)
+			_, _ = d.json.Discard(7)
 			return d.convertCode(out, typeBytePos)
 		} else if bytes.Equal(key, jsonDate) {
 			overwriteTypeByte(out, typeBytePos, bsonDateTime)
-			_, _ = d.json.Discard(6)
+			_, _ = d.json.Discard(7)
 			return d.convertDate(out)
 		} else if bytes.Equal(key, jsonType) {
 			// Still don't know if this is binary or a $type query operator, so
@@ -115,7 +120,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 6: // $scope $regex
 		if bytes.Equal(key, jsonScope) {
 			overwriteTypeByte(out, typeBytePos, bsonCodeWithScope)
-			_, _ = d.json.Discard(7)
+			_, _ = d.json.Discard(8)
 			return d.convertScope(out)
 		} else if bytes.Equal(key, jsonRegex) {
 			// Still don't know if this is legacy $regex or a $regex query
@@ -126,19 +131,19 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 7: // $binary $maxKey $minKey $symbol
 		if bytes.Equal(key, jsonBinary) {
 			overwriteTypeByte(out, typeBytePos, bsonBinary)
-			_, _ = d.json.Discard(8)
+			_, _ = d.json.Discard(9)
 			return d.convertBinary(out)
 		} else if bytes.Equal(key, jsonMaxKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMaxKey)
-			_, _ = d.json.Discard(8)
+			_, _ = d.json.Discard(9)
 			return d.convertMinMaxKey(out)
 		} else if bytes.Equal(key, jsonMinKey) {
 			overwriteTypeByte(out, typeBytePos, bsonMinKey)
-			_, _ = d.json.Discard(8)
+			_, _ = d.json.Discard(9)
 			return d.convertMinMaxKey(out)
 		} else if bytes.Equal(key, jsonSymbol) {
 			overwriteTypeByte(out, typeBytePos, bsonSymbol)
-			_, _ = d.json.Discard(8)
+			_, _ = d.json.Discard(9)
 			return d.convertSymbol(out)
 		}
 		return nil, nil
@@ -152,50 +157,50 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 	case 10: // $dbPointer $numberInt $timestamp $undefined
 		if bytes.Equal(key, jsonDbPointer) {
 			overwriteTypeByte(out, typeBytePos, bsonDBPointer)
-			_, _ = d.json.Discard(11)
+			_, _ = d.json.Discard(12)
 			return d.convertDBPointer(out)
 		}
 		if bytes.Equal(key, jsonNumberInt) {
 			overwriteTypeByte(out, typeBytePos, bsonInt32)
-			_, _ = d.json.Discard(11)
+			_, _ = d.json.Discard(12)
 			return d.convertNumberInt(out)
 		}
 		if bytes.Equal(key, jsonTimestamp) {
 			overwriteTypeByte(out, typeBytePos, bsonTimestamp)
-			_, _ = d.json.Discard(11)
+			_, _ = d.json.Discard(12)
 			return d.convertTimestamp(out)
 		}
 		if bytes.Equal(key, jsonUndefined) {
 			overwriteTypeByte(out, typeBytePos, bsonUndefined)
-			_, _ = d.json.Discard(11)
+			_, _ = d.json.Discard(12)
 			return d.convertUndefined(out)
 		}
 		return nil, nil
 	case 11: // $numberLong
 		if bytes.Equal(key, jsonNumberLong) {
 			overwriteTypeByte(out, typeBytePos, bsonInt64)
-			_, _ = d.json.Discard(12)
+			_, _ = d.json.Discard(13)
 			return d.convertNumberLong(out)
 		}
 		return nil, nil
 	case 13: // $numberDouble
 		if bytes.Equal(key, jsonNumberDouble) {
 			overwriteTypeByte(out, typeBytePos, bsonDouble)
-			_, _ = d.json.Discard(14)
+			_, _ = d.json.Discard(15)
 			return d.convertNumberDouble(out)
 		}
 		return nil, nil
 	case 14: // $numberDecimal
 		if bytes.Equal(key, jsonNumberDecimal) {
 			overwriteTypeByte(out, typeBytePos, bsonDecimal128)
-			_, _ = d.json.Discard(15)
+			_, _ = d.json.Discard(16)
 			return d.convertNumberDecimal(out)
 		}
 		return nil, nil
 	case 18: // $regularExpression
 		if bytes.Equal(key, jsonRegularExpression) {
 			overwriteTypeByte(out, typeBytePos, bsonRegex)
-			_, _ = d.json.Discard(19)
+			_, _ = d.json.Discard(20)
 			return d.convertRegularExpression(out)
 		}
 		return nil, nil
@@ -398,122 +403,79 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 }
 
 // convertType starts after the opening quote of the `"$type"` key.  We need to
-// distinguish between Extended JSON $type or something else.  If
-// we can peek far enough, we can check with regular expresssions.
-
-var dollarTypeExtJSONRe = regexp.MustCompile(`^\$type"\s*:\s*"\d\d?"`)
-var dollarTypeQueryOpRe = regexp.MustCompile(`^\$type"\s*:\s*(\d+|""|"...|\{|\[|t|f|n)`)
-
+// distinguish between Extended JSON $type or something else. We decode to a
+// scratch buffer and look for exactly "$type" and "$binary".
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
-	// Peek ahead successively longer; shouldn't be necessary but
-	// covers a pathological case with excessive white space.
-	var isExtJSON bool
-	peekDistance := 64
+	// Slow path: look for exactly $type and $binary
 	var err error
-	var buf []byte
-	for peekDistance < d.json.Size() {
-		buf, err = d.json.Peek(peekDistance)
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
-		}
-		// Smallest possible valid buffer is 10 chars: `$type":"0"`
-		if len(buf) < 10 {
-			return nil, newReadError(io.ErrUnexpectedEOF)
-		}
-		if dollarTypeExtJSONRe.Match(buf) {
-			isExtJSON = true
-			break
-		} else if dollarTypeQueryOpRe.Match(buf) {
-			// Signal this is not extended JSON.
-			return nil, nil
-		}
-		if len(buf) < peekDistance {
-			break
-		}
-		peekDistance *= 2
-	}
-	if !isExtJSON {
-		return nil, fmt.Errorf("parse error: could not find value for $type within buffer lookahead starting at %q", string(buf))
+	scratch := d.scratchPool.Get().([]byte)
+	defer func() { d.scratchPool.Put(scratch) }()
+
+	scratch = scratch[0:0]
+	scratch, err = d.convertObject(scratch, topContainer)
+	if err != nil {
+		return nil, err
 	}
 
-	// Write the type byte and hold space for length and subtype
+	var sawBinary, sawType, sawOther int
+	var binaryValue, subTypeValue bson.RawValue
+	elements, err := bson.Raw(scratch).Elements()
+	for _, e := range elements {
+		switch e.Key() {
+		case "$binary":
+			sawBinary++
+			binaryValue = e.Value()
+		case "$type":
+			sawType++
+			subTypeValue = e.Value()
+		default:
+			sawOther++
+		}
+	}
+
+	// If not exactly the extended JSON document we're looking for, copy scratch
+	// to output as a BSON document.
+	if sawBinary != 1 || sawType != 1 || sawOther != 0 ||
+		binaryValue.Type != bsontype.String || subTypeValue.Type != bsontype.String {
+		overwriteTypeByte(out, typeBytePos, bsonDocument)
+		out = append(out, scratch...)
+		return out, nil
+	}
+
+	// If we reach here, then confirmed this as a binary BSON type
 	overwriteTypeByte(out, typeBytePos, bsonBinary)
 	lengthPos := len(out)
 	out = append(out, emptyLength...)
-	subTypeBytePos := len(out)
-	out = append(out, emptyType)
-	var subType byte
 
-	// Discard $type key and closing quote
-	_, _ = d.json.Discard(6)
+	// Append the subtype byte
+	subType, err := decodeBinarySubType([]byte(subTypeValue.StringValue()))
+	if err != nil {
+		return nil, fmt.Errorf("error decoding binary $type: %s", err)
+	}
+	out = append(out, subType)
 
-	// Read name separator and opening quote
-	err = d.readNameSeparator()
+	// Decode the binary payload
+	enc := base64.StdEncoding.WithPadding('=')
+	payload, err := enc.DecodeString(binaryValue.StringValue())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing base64 data: %s", err)
 	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-
-	// Read type bytes, decode, and write them
-	out, subType, err = d.convertBinarySubType(out, subTypeBytePos)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// $binary key must be next
-	err = d.readCharAfterWS(',')
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-	err = d.readSpecificKey(jsonBinary)
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-	out, err = d.convertBase64(out)
-	if err != nil {
-		return nil, err
-	}
-
-	// write length of binary payload (added length minux 5 bytes for
-	// length+type)
-	binLength := len(out) - lengthPos - 5
+	binLength := len(payload)
 
 	// For binary subtype 2, the byte payload must have the length repeated,
-	// so we need to rearrange the output data.  We don't do this by default
-	// so that the common case avoids copies.
 	if subType == 2 {
-		// Extend out by size of length bytes, then slide data down.
+		// Extend out with payload length bytes before writing payload
+		innerLenPos := len(out)
 		out = append(out, emptyLength...)
-		payloadPos := lengthPos + 5
-		for i := len(out) - 5; i >= payloadPos; i-- {
-			out[i+4] = out[i]
-		}
-		// Write length to start of payload and increment outer length
-		overwriteLength(out, payloadPos, binLength)
+		overwriteLength(out, innerLenPos, binLength)
 		binLength += 4
 	}
 
+	out = append(out, payload...)
 	overwriteLength(out, lengthPos, binLength)
 
-	// Must end with document terminator
-	err = d.readObjectTerminator()
-	if err != nil {
-		return nil, err
-	}
+	// We don't check for object terminator here because it was already
+	// consumed in reading the object into the scratch buffer.
 
 	return out, nil
 }
@@ -525,21 +487,14 @@ func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, 
 	if err != nil {
 		return nil, 0, err
 	}
-	// Go requires even digits to decode hex.
-	normalizedSubType := subTypeBytes
-	if len(normalizedSubType) == 1 {
-		normalizedSubType = []byte{'0', normalizedSubType[0]}
-	}
-	var x [1]byte
-	xs := x[0:1]
-	_, err = hex.Decode(xs, normalizedSubType)
+	subType, err := decodeBinarySubType(subTypeBytes)
 	if err != nil {
-		return nil, 0, d.parseError(subTypeBytes[0], fmt.Sprintf("error parsing subtype: %v", err))
+		return nil, 0, d.parseError(subTypeBytes[0], err.Error())
 	}
-	overwriteTypeByte(out, subTypeBytePos, xs[0])
+	overwriteTypeByte(out, subTypeBytePos, subType)
 	_, _ = d.json.Discard(len(subTypeBytes) + 1)
 
-	return out, xs[0], nil
+	return out, subType, nil
 }
 
 // convertScope starts after the `"$scope"` key.  Having a leading $scope means
@@ -599,7 +554,9 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// convertRegex starts after the opening quote of `"$regex"`.  We need to
+var dollarRegexQueryOpRe = regexp.MustCompile(`^"\$regex"\s*:\s*\{`)
+
+// convertRegex starts on the opening quote of `"$regex"`.  We need to
 // distinguish between Extended JSON $regex or MongoDB $regex query operator.
 // If we can peek far enough, we can check with regular expresssions.
 //
@@ -610,108 +567,84 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 // into extended JSON like { "$regex" : { <$regex or $regularExpression object>
 // } }, so if we see that "$regex" is followed by an object, we treat that as a
 // query.
-
-var dollarRegexExtJSONRe = regexp.MustCompile(`^\$regex"\s*:\s*"[^"]*"\s*,\s*"\$options"`)
-var dollarRegexQueryOpRe = regexp.MustCompile(`^\$regex"\s*:\s*\{`)
-var dollarRegexQueryElse = regexp.MustCompile(`^\$regex"\s*:\s*(\d+|"[^"]{0,7}"|"[^"]{8,}|\{|\[|t|f|n)`)
-
 func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
-	// Peek ahead successively longer; shouldn't be necessary but
-	// covers a pathological case with excessive white space
-	peekDistance := 64
-	var isExtJSON bool
-	var err error
-	var buf []byte
-	for peekDistance < d.json.Size() {
-		buf, err = d.json.Peek(peekDistance)
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
+	// Fast path: Peek ahead some amount and look for $regex with object, which
+	// we know isn't extended JSON. 16 bytes is enough even with a little extra
+	// white space.
+	buf, err := d.json.Peek(16)
+	if err != nil {
+		// EOF is OK if we peeked to the end
+		if err != io.EOF {
+			return nil, err
 		}
-		// Smallest possible matching buffer is 9 chars: `$regex":{`
-		if len(buf) < 9 {
-			return nil, newReadError(io.ErrUnexpectedEOF)
-		}
-		if dollarRegexExtJSONRe.Match(buf) {
-			isExtJSON = true
-			break
-		} else if dollarRegexQueryOpRe.Match(buf) {
-			// Signal not extended JSON with double nil.
-			return nil, nil
-		} else if dollarRegexQueryElse.Match(buf) {
-			// Signal not extended JSON with double nil.
-			return nil, nil
-		}
-		if len(buf) < peekDistance {
-			break
-		}
-		peekDistance *= 2
 	}
-	if !isExtJSON {
-		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
+	if dollarRegexQueryOpRe.Match(buf) {
+		return nil, nil
+	}
+
+	return d.convertRegexOptionsSlowPath(out, typeBytePos)
+}
+
+// convertRegexOptionsSlowPath: Convert current object to a scratch BSON buffer.
+// If it has exactly two keys, $regex and $options, and if both values are
+// strings, then we can copy just those pieces into a BSON regex in the output.
+// Otherwise, it's not extended JSON and we can copy the scratch buffer to the
+// output as a document
+func (d *Decoder) convertRegexOptionsSlowPath(out []byte, typeBytePos int) ([]byte, error) {
+
+	var err error
+	scratch := d.scratchPool.Get().([]byte)
+	defer func() { d.scratchPool.Put(scratch) }()
+
+	scratch = scratch[0:0]
+	scratch, err = d.convertObject(scratch, topContainer)
+	if err != nil {
+		return nil, err
+	}
+
+	var sawRegex, sawOptions, sawOther int
+	var regexValue, optionsValue bson.RawValue
+	elements, err := bson.Raw(scratch).Elements()
+	for _, e := range elements {
+		switch e.Key() {
+		case "$regex":
+			sawRegex++
+			regexValue = e.Value()
+		case "$options":
+			sawOptions++
+			optionsValue = e.Value()
+		default:
+			sawOther++
+		}
+	}
+
+	// If not exactly an extended JSON document, copy scratch to output as
+	// a BSON document.
+	if sawRegex != 1 || sawOptions != 1 || sawOther != 0 ||
+		regexValue.Type != bsontype.String || optionsValue.Type != bsontype.String {
+		overwriteTypeByte(out, typeBytePos, bsonDocument)
+		out = append(out, scratch...)
+		return out, nil
 	}
 
 	// If we reach here, then confirmed this as a regular expression BSON type.
 	overwriteTypeByte(out, typeBytePos, bsonRegex)
 
-	// Discard $regex key and closing quote
-	_, _ = d.json.Discard(7)
+	out = append(out, []byte(regexValue.StringValue())...)
+	out = append(out, nullByte)
 
-	// Read name separator and opening quote
-	err = d.readNameSeparator()
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-
-	// Read regex pattern
-	out, err = d.convertCString(out)
-	if err != nil {
-		return nil, err
-	}
-
-	// $options key must be next
-	err = d.readCharAfterWS(',')
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-	err = d.readSpecificKey(jsonOptions)
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-
-	// Read options string into a buffer because it has to follow the regular
-	// expression pattern. Sort/validate the options.
-	opts := make([]byte, 0, 8)
-	opts, err = d.convertCString(opts)
-	if err != nil {
-		return nil, err
-	}
+	opts := []byte(optionsValue.StringValue())
 	if len(opts) > 1 {
-		err = sortOptions(opts[0 : len(opts)-1])
+		err = sortOptions(opts)
 		if err != nil {
 			return nil, err
 		}
+		out = append(out, opts...)
 	}
-	out = append(out, opts...)
+	out = append(out, nullByte)
 
-	// Must end with document terminator.
-	err = d.readObjectTerminator()
-	if err != nil {
-		return nil, err
-	}
+	// We don't check for object terminator here because it was already
+	// consumed in reading the object into the scratch buffer.
 
 	return out, nil
 }
@@ -913,6 +846,7 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	}
 
 	out, subType, err = d.convertBinarySubType(out, subTypeBytePos)
+
 	if err != nil {
 		return nil, err
 	}
@@ -990,116 +924,33 @@ func (d *Decoder) convertSymbol(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// convertOptions starts after the opening quote of `"$regex"`.  We need to
+var dollarOptionsQueryOpRe = regexp.MustCompile(`^"\$options"\s*:\s*"[^"]*"\s*,\s*"\$regex"\s*:\s*\{`)
+
+// convertOptions starts on the opening quote of `"$options"`.  We need to
 // distinguish between Extended JSON $regex or MongoDB $regex query operator.
 // If we can peek far enough, we can check with regular expresssions.
 //
 // See convertRegex for the logic differentiating the query and extended JSON
 // forms.  Unlike that function, the regular expressions here must look past
-// $option to find $regex to disambiguate.
-
-var dollarOptionsExtJSONRe = regexp.MustCompile(`^\$options"\s*:\s*"[^"]*"\s*,\s*"\$regex"\s*:\s*"`)
-var dollarOptionsQueryOpRe = regexp.MustCompile(`^\$options"\s*:\s*"[^"]*"\s*,\s*"\$regex"\s*:\s*\{`)
-var dollarOptionsQueryElse = regexp.MustCompile(`^\$options"\s*:\s*(\d+|"[^"]{0,5}"|"[^"]{6,}|\{|\[|t|f|n)`)
-
+// $option to find $regex to disambiguate.  If excessive white space makes the
+// fast path regex fail to match, we'll still catch the correct case in the slow
+// path.
 func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
-	// Peek ahead successively longer; shouldn't be necessary but
-	// covers a pathological case with excessive white space
-	peekDistance := 64
-	var isExtJSON bool
-	var err error
-	var buf []byte
-	for peekDistance < d.json.Size() {
-		buf, err = d.json.Peek(peekDistance)
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
-		}
-		// Smallest possible matching buffer is 23 chars: `$options":"","$regex":{`
-		if len(buf) < 23 {
-			return nil, newReadError(io.ErrUnexpectedEOF)
-		}
-		if dollarOptionsExtJSONRe.Match(buf) {
-			isExtJSON = true
-			break
-		} else if dollarOptionsQueryOpRe.Match(buf) {
-			// Signal not extended JSON with double nil.
-			return nil, nil
-		} else if dollarOptionsQueryElse.Match(buf) {
-			// Signal not extended JSON with double nil.
-			return nil, nil
-		}
-		if len(buf) < peekDistance {
-			break
-		}
-		peekDistance *= 2
-	}
-	if !isExtJSON {
-		return nil, fmt.Errorf("parse error: invalid $regex Extended JSON at %q", string(buf))
-	}
-
-	// If we reach here, then confirmed this as a regular expression BSON type.
-	overwriteTypeByte(out, typeBytePos, bsonRegex)
-
-	// Discard $options key and closing quote
-	_, _ = d.json.Discard(9)
-	// Read name separator and opening quote
-	err = d.readNameSeparator()
+	// Fast path: Peek ahead some amount and look for $regex with object, which
+	// we know isn't extended JSON. 48 bytes is enough even with a little extra
+	// white space to see `"$options" : "islmux", "$regex" : {`
+	buf, err := d.json.Peek(48)
 	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-
-	// Read options string into a buffer because it has to follow the regular
-	// expression pattern. Sort/validate the options.
-	opts := make([]byte, 0, 8)
-	opts, err = d.convertCString(opts)
-	if err != nil {
-		return nil, err
-	}
-	if len(opts) > 1 {
-		err = sortOptions(opts[0 : len(opts)-1])
-		if err != nil {
+		// EOF is OK if we peeked to the end
+		if err != io.EOF {
 			return nil, err
 		}
 	}
-
-	// $regex key must be next
-	err = d.readCharAfterWS(',')
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-	err = d.readSpecificKey(jsonRegex)
-	if err != nil {
-		return nil, err
-	}
-	err = d.readQuoteStart()
-	if err != nil {
-		return nil, err
-	}
-	out, err = d.convertCString(out)
-	if err != nil {
-		return nil, err
+	if dollarRegexQueryOpRe.Match(buf) {
+		return nil, nil
 	}
 
-	// Append buffered options
-	out = append(out, opts...)
-
-	// Must end with document terminator.
-	err = d.readObjectTerminator()
-	if err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return d.convertRegexOptionsSlowPath(out, typeBytePos)
 }
 
 // convertDBPointer starts after the `"$dbPointer"` key.  The value
@@ -1744,4 +1595,20 @@ func sortOptions(opts []byte) error {
 		}
 	}
 	return nil
+}
+
+// decodeBinarySubType converts a slice of bytes to a subType.  input must have
+// at least one byte
+func decodeBinarySubType(input []byte) (byte, error) {
+	// Go requires even digits to decode hex.
+	if len(input) == 1 {
+		input = []byte{'0', input[0]}
+	}
+	var x [1]byte
+	xs := x[0:1]
+	_, err := hex.Decode(xs, input)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing subtype: %v", err)
+	}
+	return xs[0], nil
 }

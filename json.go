@@ -112,6 +112,13 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 		// If ExtJSON enabled and `handleExtJSON` returns a buffer, then this
 		// value was extended JSON and the value has been consumed.
 		if d.extJSONAllowed && outerTypeBytePos != topContainer {
+			// Put back quote so that handleExtJSON gets a valid start
+			// for convertObject, as some types need to parse it to a scratch
+			// buffer.
+			err = d.json.UnreadByte()
+			if err != nil {
+				panic(err)
+			}
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
 				return nil, err
@@ -119,6 +126,8 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 			if buf != nil {
 				return buf, nil
 			}
+			// Not extended JSON so re-read the quote we put back.
+			_, _ = d.json.ReadByte()
 		}
 
 		// Not extended JSON, so now write the length placeholder

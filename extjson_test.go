@@ -74,6 +74,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary, hex type",
+			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "F0"}}}`,
+			output: "1D00000005780010000000F073FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
 			label:  "$binary, empty",
 			input:  `{"x" : { "$binary" : {"base64" : "", "subType" : "03"}}}`,
 			output: "0D000000057800000000000300",
@@ -109,6 +114,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
+			label:  "$binary legacy, hex type",
+			input:  `{"x" : { "$binary" : "c//SZESzTGmQ6OfR38A11A==", "$type" : "F0"}}`,
+			output: "1D00000005780010000000F073FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
 			label:  "$binary legacy, single type digit",
 			input:  `{"x" : { "$binary" : "c//SZESzTGmQ6OfR38A11A==", "$type" : "3"}}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
@@ -122,6 +132,11 @@ func TestExtJSON(t *testing.T) {
 			label:  "$binary legacy, keys reversed",
 			input:  `{"x" : { "$type" : "03", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
 			output: "1D000000057800100000000373FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$binary legacy, keys reversed, hex type",
+			input:  `{"x" : { "$type" : "F0", "$binary" : "c//SZESzTGmQ6OfR38A11A==" }}`,
+			output: "1D00000005780010000000F073FFD26444B34C6990E8E7D1DFC035D400",
 		},
 		{
 			label:  "$binary legacy, keys reversed, single type digit",
@@ -304,9 +319,29 @@ func TestExtJSON(t *testing.T) {
 			output: "16000000022473796d626f6c00040000006162630000",
 		},
 		{
-			label:  "$type not extended JSON nor query",
+			label:  "$type not extended JSON",
 			input:  `{"":{"$type":""}}`,
 			output: "180000000300110000000224747970650001000000000000",
+		},
+		{
+			label:  "$type not extended JSON 2",
+			input:  `{"":{"$type":7}}`,
+			output: "1700000003001000000010247479706500070000000000",
+		},
+		{
+			label:  "$type not extended JSON 3",
+			input:  `{"":{"$type":{"$numberInt":"7"}}}`,
+			output: "1700000003001000000010247479706500070000000000",
+		},
+		{
+			label:  "$type not extended JSON 4",
+			input:  `{"":{"$type":"00", "$binary":"//8=", "$ne":"a"}}`,
+			output: "370000000300300000000224747970650003000000303000022462696e61727900050000002f2f383d0002246e65000200000061000000",
+		},
+		{
+			label:  "$type not extended JSON 5",
+			input:  `{"":{"$type":{"$type":0}}}`,
+			output: "2300000003001c00000003247479706500100000001024747970650000000000000000",
 		},
 		{
 			label:  "$options not extended JSON nor query",
@@ -317,6 +352,26 @@ func TestExtJSON(t *testing.T) {
 			label:  "$regex not extended JSON nor query",
 			input:  `{"":{"$regex":"","options" : "im"}}`,
 			output: "2900000003002200000002247265676578000100000000026f7074696f6e730003000000696d000000",
+		},
+		{
+			label:  "$options not extended JSON nor query 2",
+			input:  `{"":{"$options":"","$ne" : "a","$regex" : "abc"}}`,
+			output: "3600000003002f00000002246f7074696f6e7300010000000002246e6500020000006100022472656765780004000000616263000000",
+		},
+		{
+			label:  "$regex not extended JSON nor query 2",
+			input:  `{"":{"$regex":"","$ne": "a", "$options" : "im"}}`,
+			output: "3500000003002e0000000224726567657800010000000002246e650002000000610002246f7074696f6e730003000000696d000000",
+		},
+		{
+			label:  "$options not extended JSON nor query 3",
+			input:  `{"":{"$options":"","$regex" : "abc", "$ne":"a"}}`,
+			output: "3600000003002f00000002246f7074696f6e730001000000000224726567657800040000006162630002246e65000200000061000000",
+		},
+		{
+			label:  "$regex not extended JSON nor query 3",
+			input:  `{"":{"$regex":"abc","$options" : "im", "$ne":"a"}}`,
+			output: "380000000300310000000224726567657800040000006162630002246f7074696f6e730003000000696d0002246e65000200000061000000",
 		},
 	}
 

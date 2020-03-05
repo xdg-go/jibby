@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 )
 
 // Decoder reads and decodes JSON objects to BSON from a buffered input stream.
@@ -25,6 +26,7 @@ type Decoder struct {
 	extJSONAllowed bool
 	json           *bufio.Reader
 	maxDepth       int
+	scratchPool    *sync.Pool
 }
 
 // NewDecoder returns a new decoder.  If a UTF-8 byte-order-mark (BOM) exists,
@@ -47,8 +49,9 @@ func NewDecoder(json *bufio.Reader) (*Decoder, error) {
 	}
 
 	d := &Decoder{
-		json:     json,
-		maxDepth: 200,
+		json:        json,
+		maxDepth:    200,
+		scratchPool: &sync.Pool{New: func() interface{} { return make([]byte, 0, 256) }},
 	}
 
 	ch, err := d.readAfterWS()
