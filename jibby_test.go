@@ -53,8 +53,8 @@ func TestJibbyTestSuite_Passing(t *testing.T) {
 // For implementation defined behavior: these errors are allowed as we don't
 // support the related features.
 var allowedErrors = []string{
-	"detected unsupported", // 16/32-bit BOM
-	"value out of range",   // large ints/floats
+	ErrUnsupportedBOM.Error(),
+	"value out of range", // large ints/floats
 }
 
 // We assume valid UTF-8; these files test handling invalid strings,

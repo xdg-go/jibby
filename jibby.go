@@ -10,11 +10,15 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"sync"
 )
+
+// ErrUnsupportedBOM means that a UTF-16 or UTF-32 byte order mark was found.
+var ErrUnsupportedBOM = errors.New("unsupported byte order mark")
 
 // Decoder reads and decodes JSON objects to BSON from a buffered input stream.
 // Objects may be separated by optional white space or may be in a well-formed
@@ -30,11 +34,12 @@ type Decoder struct {
 }
 
 // NewDecoder returns a new decoder.  If a UTF-8 byte-order-mark (BOM) exists,
-// it will be stripped.  Because only UTF-8 is supported, other BOMs are errors.
-// This function consumes leading white space and checks if the first character
-// is '['.  If so, the input format is expected to be a single JSON array of
-// objects and the stream will consist of the objects in the array.  Any read
-// error (including io.EOF) during these checks will be returned.
+// it will be stripped.  Because only UTF-8 is supported, other BOMs are error
+// and will return ErrUnsupportedBOM.  This function consumes leading white
+// space and checks if the first character is '['.  If so, the input format is
+// expected to be a single JSON array of objects and the stream will consist of
+// the objects in the array.  Any read error (including io.EOF) during these
+// checks will be returned.
 //
 // If the the bufio.Reader's size is less than 8192, it will be rebuffered.
 // This is necessary to account for lookahead for long decimals to minimize
@@ -497,7 +502,7 @@ func handleBOM(r *bufio.Reader) error {
 		return nil
 	}
 	if bytes.Equal(preamble, utf16BEBOM) || bytes.Equal(preamble, utf16LEBOM) {
-		return fmt.Errorf("error: detected unsupported UTF-16 BOM")
+		return ErrUnsupportedBOM
 	}
 
 	// Peek 3 byte BOM; UTF-8 is supported, so discard them if found.
@@ -515,7 +520,7 @@ func handleBOM(r *bufio.Reader) error {
 		return nil
 	}
 	if bytes.Equal(preamble, utf32BEBOM) || bytes.Equal(preamble, utf32LEBOM) {
-		return fmt.Errorf("error: detected unsupported UTF-32 BOM")
+		return ErrUnsupportedBOM
 	}
 
 	return nil
