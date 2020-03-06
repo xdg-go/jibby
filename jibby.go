@@ -76,7 +76,7 @@ func NewDecoder(json *bufio.Reader) (*Decoder, error) {
 		_ = d.json.UnreadByte()
 	}
 
-	return d, err
+	return d, nil
 }
 
 // ExtJSON toggles whether extended JSON is interpreted by the decoder.
@@ -533,5 +533,5 @@ func newReadError(err error) error {
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
 	}
-	return fmt.Errorf("error reading json: %w", err)
+	return fmt.Errorf("read error while parsing: %w", err)
 }
