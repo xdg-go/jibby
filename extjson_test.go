@@ -289,6 +289,11 @@ func TestExtJSON(t *testing.T) {
 			input:  `{"a":{"$date":"1970-01-01T20:00:00Z"}}`,
 		},
 		{
+			label:  "$date, numeric literal",
+			input:  `{"a":{"$date":253402300800000}}`,
+			output: "1000000009610000DC1FD277E6000000",
+		},
+		{
 			label:  "$date, invalid object",
 			input:  `{"a" : {"$date" : {"00000" : "0"}}}`,
 			errStr: `expected "$numberLong"`,
@@ -504,6 +509,7 @@ func compareCorpusUnmarshal(t *testing.T, input string, output string) {
 
 var skipParseErrorCases = []string{
 	"Bad DBRef",
+	"Bad $date (number, not string or hash)",
 }
 
 func testParseErrorCorpusCases(t *testing.T, name string, cases []parseErrorCorpusCase) {

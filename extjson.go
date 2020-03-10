@@ -389,6 +389,17 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		_ = d.json.UnreadByte()
+		// Unread and reread as Int64
+		epochMillis, err := d.readInt64()
+		if err != nil {
+			return nil, err
+		}
+		var x [8]byte
+		xs := x[0:8]
+		binary.LittleEndian.PutUint64(xs, uint64(epochMillis))
+		out = append(out, xs...)
 	default:
 		return nil, d.parseError(ch, "invalid value for $date")
 	}
@@ -1159,7 +1170,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 				return nil, d.parseError(ch, "key 't' repeated")
 			}
 			sawT = true
-			timestamp, err = d.readUInt32()
+			timestamp, err = d.readUint32()
 			if err != nil {
 				return nil, err
 			}
@@ -1175,7 +1186,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 				return nil, d.parseError(ch, "key 'i' repeated")
 			}
 			sawI = true
-			increment, err = d.readUInt32()
+			increment, err = d.readUint32()
 			if err != nil {
 				return nil, err
 			}

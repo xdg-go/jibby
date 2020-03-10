@@ -38,6 +38,9 @@ const decimalPeekWidth = 6180
 // Uint32 is max 4294967295, 10 chars plus trailing whitespace/terminator.
 const uint32PeekWidth = 11
 
+// Int65 is min -9223372036854775808, 20 chars plus trailing whitespace/terminator.
+const int64PeekWidth = 21
+
 // Go's NaN includes a payload, so this is a NaN without a payload
 const canonicalNaN = uint64(0x7FF8000000000000)
 

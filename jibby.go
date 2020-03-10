@@ -348,10 +348,31 @@ LOOP:
 
 // peekUint32 works like like peekNumber but only for characters valid
 // for a Uint32.
-func (d *Decoder) peekUInt32() ([]byte, error) {
+func (d *Decoder) peekUint32() ([]byte, error) {
+	buf, err := d.peekInt(uint32PeekWidth)
+	if err != nil {
+		return nil, err
+	}
+	if buf[0] == '-' {
+		return nil, d.parseError(buf[0], "negative number not allowed")
+	}
+	return buf, nil
+}
+
+// peekInt64 works like like peekNumber but only for characters valid
+// for a Int64.
+func (d *Decoder) peekInt64() ([]byte, error) {
+	buf, err := d.peekInt(int64PeekWidth)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func (d *Decoder) peekInt(intWidth int) ([]byte, error) {
 	var terminated bool
 
-	buf, err := d.json.Peek(uint32PeekWidth)
+	buf, err := d.json.Peek(intWidth)
 	if err != nil {
 		// here, io.EOF is OK, since we're peeking and may hit end of
 		// object
@@ -380,6 +401,14 @@ LOOP:
 		return nil, d.parseError(buf[0], "number not found")
 	}
 
+	// Remove a leading negative sign, if any, before further validation.
+	if num[0] == '-' {
+		num = num[1:]
+		if len(num) == 0 {
+			return nil, d.parseError(buf[0], "number not found")
+		}
+	}
+
 	// Check for number
 	if num[0] < '0' || num[0] > '9' {
 		return nil, d.parseError(buf[0], "invalid character in number")
@@ -390,7 +419,7 @@ LOOP:
 	}
 
 	if !terminated {
-		if len(buf) < uint32PeekWidth {
+		if len(buf) < intWidth {
 			return nil, newReadError(io.ErrUnexpectedEOF)
 		}
 		return nil, d.parseError(buf[0], "number too long")
@@ -401,8 +430,8 @@ LOOP:
 
 // readUint32 consumes a Uint32 value from the input stream or an error
 // if the input stream doesn't begin with a Uint32 value.
-func (d *Decoder) readUInt32() (uint32, error) {
-	buf, err := d.peekUInt32()
+func (d *Decoder) readUint32() (uint32, error) {
+	buf, err := d.peekUint32()
 	if err != nil {
 		return 0, err
 	}
@@ -412,6 +441,21 @@ func (d *Decoder) readUInt32() (uint32, error) {
 	}
 	_, _ = d.json.Discard(len(buf))
 	return uint32(n), nil
+}
+
+// readInt64 consumes a Int64 value from the input stream or an error
+// if the input stream doesn't begin with an Int64 value.
+func (d *Decoder) readInt64() (int64, error) {
+	buf, err := d.peekInt64()
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseInt(string(buf), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse error: int conversion: %v", err)
+	}
+	_, _ = d.json.Discard(len(buf))
+	return int64(n), nil
 }
 
 // peekBoundedQuote peeks into the input stream for a series of non-quote
