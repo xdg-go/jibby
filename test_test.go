@@ -43,6 +43,7 @@ func testWithUnmarshal(t *testing.T, cases []unmarshalTestCase, extJSON bool) {
 				var got string
 				if err != nil {
 					got = err.Error()
+					t.Log(got)
 				}
 				if !strings.Contains(got, c.errStr) {
 					t.Errorf("expected error with '%s', but got %v", c.errStr, got)

@@ -74,7 +74,7 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		return nil, d.parseError(ch, "invalid character")
+		return nil, d.parseError([]byte{ch}, "invalid character")
 	}
 
 	return out, nil
@@ -144,7 +144,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 			return nil, err
 		}
 	default:
-		return nil, d.parseError(ch, "expecting key or end of object")
+		return nil, d.parseError([]byte{ch}, "expecting key or end of object")
 	}
 
 	// Next non-WS char must be ':' for separator
@@ -174,7 +174,7 @@ LOOP:
 				return nil, newReadError(err)
 			}
 			if ch != '"' {
-				return nil, d.parseError(ch, "expecting key")
+				return nil, d.parseError([]byte{ch}, "expecting key")
 			}
 
 			// Record position for the placeholder type byte that we write
@@ -201,7 +201,7 @@ LOOP:
 		case '}':
 			break LOOP
 		default:
-			return nil, d.parseError(ch, "expecting value-separator or end of object")
+			return nil, d.parseError([]byte{ch}, "expecting value-separator or end of object")
 		}
 	}
 
@@ -295,7 +295,7 @@ LOOP:
 		case ']':
 			break LOOP
 		default:
-			return nil, d.parseError(ch, "expecting value-separator or end of array")
+			return nil, d.parseError([]byte{ch}, "expecting value-separator or end of array")
 		}
 	}
 
@@ -318,7 +318,7 @@ func (d *Decoder) convertTrue(out []byte) ([]byte, error) {
 	}
 	// already saw 't', looking for "rue"
 	if rest[0] != 'r' || rest[1] != 'u' || rest[2] != 'e' {
-		return nil, d.parseError('t', "expecting true")
+		return nil, d.parseError([]byte{'t'}, "expecting true")
 	}
 	_, _ = d.json.Discard(3)
 
@@ -337,7 +337,7 @@ func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	}
 	// Already saw 'f', looking for "alse"
 	if rest[0] != 'a' || rest[1] != 'l' || rest[2] != 's' || rest[3] != 'e' {
-		return nil, d.parseError('f', "expecting false")
+		return nil, d.parseError([]byte{'f'}, "expecting false")
 	}
 	_, _ = d.json.Discard(4)
 
@@ -356,7 +356,7 @@ func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 	}
 	// Already saw 'n', looking for "ull"
 	if rest[0] != 'u' || rest[1] != 'l' || rest[2] != 'l' {
-		return nil, d.parseError('n', "expecting null")
+		return nil, d.parseError([]byte{'n'}, "expecting null")
 	}
 	_, _ = d.json.Discard(3)
 
@@ -398,7 +398,7 @@ func (d *Decoder) convertNumber(out []byte, typeBytePos int) ([]byte, error) {
 func (d *Decoder) convertFloat(out []byte, typeBytePos int, buf []byte) ([]byte, error) {
 	n, err := strconv.ParseFloat(string(buf), 64)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: float conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("float conversion: %v", err))
 	}
 
 	overwriteTypeByte(out, typeBytePos, bsonDouble)
@@ -418,7 +418,7 @@ func (d *Decoder) convertInt(out []byte, typeBytePos int, buf []byte) ([]byte, e
 			// Doesn't fit in int64, so treat as float
 			return d.convertFloat(out, typeBytePos, buf)
 		}
-		return nil, fmt.Errorf("parse error: int conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("int conversion: %v", err))
 	}
 
 	if n < math.MinInt32 || n > math.MaxInt32 {
@@ -512,12 +512,15 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 					// convert next 4 bytes to rune and append it as UTF-8
 					n, err := strconv.ParseUint(string(buf[i+2:i+6]), 16, 32)
 					if err != nil {
-						return nil, fmt.Errorf("parse error: converting unicode escape: %v", err)
+						_, _ = d.json.Discard(i)
+						return nil, d.parseError(nil, fmt.Sprintf("converting unicode escape: %v", err))
 					}
 					out = append(out, []byte(string(n))...)
 					i += 5
 				default:
-					return nil, fmt.Errorf("parse error: unknown escape '%s'", string(buf[i+1]))
+					msg := fmt.Sprintf("unknown escape '%s'", string(buf[i+1]))
+					_, _ = d.json.Discard(i)
+					return nil, d.parseError(nil, msg)
 				}
 				// Escape is done: go back to needing only one char at a time.
 				charsNeeded = 1
@@ -526,7 +529,8 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 				break INNER
 			default:
 				if buf[i] < ' ' {
-					return nil, fmt.Errorf("parse error: control characters not allowed in strings")
+					_, _ = d.json.Discard(i)
+					return nil, d.parseError(nil, "control characters not allowed in strings")
 				}
 				out = append(out, buf[i])
 			}

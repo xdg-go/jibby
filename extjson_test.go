@@ -91,7 +91,7 @@ func TestExtJSON(t *testing.T) {
 		{
 			label:  "$binary, subtype too long",
 			input:  `{"x" : { "$binary" : {"base64" : "c//SZESzTGmQ6OfR38A11A==", "subType" : "123"}}}`,
-			errStr: "exceeds expected length 2",
+			errStr: "exceeds expected maximum length 2",
 		},
 		{
 			label:  "$binary, single type digit",
@@ -271,7 +271,7 @@ func TestExtJSON(t *testing.T) {
 		{
 			label:  "$dbPointer, short key",
 			input:  `{"":{"$dbPointer":{"":""}}}`,
-			errStr: `string falls short of expected length`,
+			errStr: `string shorter than expected minimum length`,
 		},
 		{
 			label:  "$date, numberLong",
@@ -294,9 +294,14 @@ func TestExtJSON(t *testing.T) {
 			output: "1000000009610000DC1FD277E6000000",
 		},
 		{
+			label:  "$date, bad ISO 8601",
+			input:  `{"a" : {"$date" : "1970.01.01T00.00.00Z"}}`,
+			errStr: `invalid $date value string`,
+		},
+		{
 			label:  "$date, invalid object",
 			input:  `{"a" : {"$date" : {"00000" : "0"}}}`,
-			errStr: `expected "$numberLong"`,
+			errStr: `shorter than expected minimum length`,
 		},
 		{
 			label:  "$date, invalid parse",
@@ -532,6 +537,7 @@ func testParseErrorCorpusCases(t *testing.T, name string, cases []parseErrorCorp
 				if err == nil {
 					t.Fatalf("Expected error but got nil")
 				}
+				t.Log(err)
 				if !strings.Contains(err.Error(), "parse error") {
 					t.Fatalf("Error didn't contain 'parse error': %v", err)
 				}

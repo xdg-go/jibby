@@ -122,9 +122,9 @@ func (d *Decoder) Decode(buf []byte) ([]byte, error) {
 			d.arrayFinished = true
 			return nil, io.EOF
 		}
-		return nil, d.parseError(ch, "Decode only supports object decoding")
+		return nil, d.parseError([]byte{ch}, "Decode only supports object decoding")
 	default:
-		return nil, d.parseError(ch, "Decode only supports object decoding")
+		return nil, d.parseError([]byte{ch}, "Decode only supports object decoding")
 	}
 
 	buf, err = d.convertValue(buf, topContainer)
@@ -147,7 +147,7 @@ func (d *Decoder) Decode(buf []byte) ([]byte, error) {
 		case ']':
 			d.arrayFinished = true
 		default:
-			return nil, d.parseError(ch, "expecting value-separator or end of array")
+			return nil, d.parseError([]byte{ch}, "expecting value-separator or end of array")
 		}
 	}
 
@@ -194,7 +194,7 @@ func (d *Decoder) readCharAfterWS(b byte) error {
 		return newReadError(err)
 	}
 	if ch != b {
-		return d.parseError(ch, fmt.Sprintf("expecting '%c'", b))
+		return d.parseError([]byte{ch}, fmt.Sprintf("expecting '%c'", b))
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func (d *Decoder) readNextChar(b byte) error {
 		return newReadError(err)
 	}
 	if ch != b {
-		return d.parseError(ch, fmt.Sprintf("expecting '%c'", b))
+		return d.parseError([]byte{ch}, fmt.Sprintf("expecting '%c'", b))
 	}
 	return nil
 }
@@ -250,15 +250,15 @@ func (d *Decoder) readQuoteStart() error {
 // handles other errors like readCharAfterWS.
 func (d *Decoder) readSpecificKey(expected []byte) error {
 	charsNeeded := len(expected) + 1
-	key, err := d.peekBoundedQuote(charsNeeded, charsNeeded)
+	key, err := d.peekBoundedQuote(charsNeeded, charsNeeded, string(expected))
 	if err != nil {
-		return fmt.Errorf("expected %q, but failed to find key: %v", string(expected), err)
+		return err
 	}
 	if !bytes.Equal(key, expected) {
 		if len(key) > 0 {
-			return d.parseError(key[0], fmt.Sprintf("expected %q", string(expected)))
+			return d.parseError(nil, fmt.Sprintf("expected %q", string(expected)))
 		}
-		return d.parseError('"', fmt.Sprintf("expected %q", string(expected)))
+		return d.parseError(nil, fmt.Sprintf("expected %q", string(expected)))
 	}
 	_, _ = d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
@@ -302,13 +302,15 @@ LOOP:
 		case '.':
 			isFloat = true
 			if i < len(buf)-1 && (buf[i+1] < '0' || buf[i+1] > '9') {
-				return nil, false, d.parseError(buf[i], "decimal must be followed by digit")
+				_, _ = d.json.Discard(i)
+				return nil, false, d.parseError(nil, "decimal must be followed by digit")
 			}
 		case ' ', '\t', '\n', '\r', ',', ']', '}':
 			terminated = true
 			break LOOP
 		case '_':
-			return nil, false, d.parseError(buf[i], "invalid character in number")
+			_, _ = d.json.Discard(i)
+			return nil, false, d.parseError(nil, "invalid character in number")
 		}
 	}
 
@@ -316,7 +318,7 @@ LOOP:
 		if len(buf) < doublePeekWidth {
 			return nil, false, newReadError(io.ErrUnexpectedEOF)
 		}
-		return nil, false, d.parseError(buf[0], "number too long")
+		return nil, false, d.parseError(nil, "number too long")
 	}
 
 	// Do some validation before ParseInt/ParseFloat for basic sanity and for
@@ -330,16 +332,16 @@ LOOP:
 
 	// Check for empty string
 	if len(num) == 0 {
-		return nil, false, d.parseError(buf[0], "number not found")
+		return nil, false, d.parseError(nil, "number not found")
 	}
 
 	// Check for number
 	if num[0] < '0' || num[0] > '9' {
-		return nil, false, d.parseError(buf[0], "invalid character in number")
+		return nil, false, d.parseError(nil, "invalid character in number")
 	}
 
 	if num[0] == '0' && len(num) > 1 && num[1] != '.' && num[1] != 'e' && num[1] != 'E' {
-		return nil, false, d.parseError(buf[0], "leading zeros not allowed")
+		return nil, false, d.parseError(nil, "leading zeros not allowed")
 	}
 
 	// Return the slice without the terminating character.
@@ -354,7 +356,7 @@ func (d *Decoder) peekUint32() ([]byte, error) {
 		return nil, err
 	}
 	if buf[0] == '-' {
-		return nil, d.parseError(buf[0], "negative number not allowed")
+		return nil, d.parseError(nil, "negative number not allowed")
 	}
 	return buf, nil
 }
@@ -398,31 +400,31 @@ LOOP:
 
 	// Check for empty string
 	if len(num) == 0 {
-		return nil, d.parseError(buf[0], "number not found")
+		return nil, d.parseError(nil, "number not found")
 	}
 
 	// Remove a leading negative sign, if any, before further validation.
 	if num[0] == '-' {
 		num = num[1:]
 		if len(num) == 0 {
-			return nil, d.parseError(buf[0], "number not found")
+			return nil, d.parseError(nil, "number not found")
 		}
 	}
 
 	// Check for number
 	if num[0] < '0' || num[0] > '9' {
-		return nil, d.parseError(buf[0], "invalid character in number")
+		return nil, d.parseError(nil, "invalid character in number")
 	}
 
 	if num[0] == '0' && len(num) > 1 {
-		return nil, d.parseError(buf[0], "leading zeros not allowed")
+		return nil, d.parseError(nil, "leading zeros not allowed")
 	}
 
 	if !terminated {
 		if len(buf) < intWidth {
 			return nil, newReadError(io.ErrUnexpectedEOF)
 		}
-		return nil, d.parseError(buf[0], "number too long")
+		return nil, d.parseError(nil, "number too long")
 	}
 
 	return buf[0:i], nil
@@ -437,7 +439,7 @@ func (d *Decoder) readUint32() (uint32, error) {
 	}
 	n, err := strconv.ParseUint(string(buf), 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("parse error: uint conversion: %v", err)
+		return 0, d.parseError(nil, fmt.Sprintf("uint conversion: %v", err))
 	}
 	_, _ = d.json.Discard(len(buf))
 	return uint32(n), nil
@@ -452,7 +454,7 @@ func (d *Decoder) readInt64() (int64, error) {
 	}
 	n, err := strconv.ParseInt(string(buf), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse error: int conversion: %v", err)
+		return 0, d.parseError(nil, fmt.Sprintf("int conversion: %v", err))
 	}
 	_, _ = d.json.Discard(len(buf))
 	return int64(n), nil
@@ -465,11 +467,11 @@ func (d *Decoder) readInt64() (int64, error) {
 // *excludes* the closing quote.  Nothing is consumed from the input stream.
 //
 // NOTE: JSON string escapes (`\n`, etc.) are not supported/interpreted.
-func (d *Decoder) peekBoundedQuote(minLen, maxLen int) ([]byte, error) {
+func (d *Decoder) peekBoundedQuote(minLen, maxLen int, label string) ([]byte, error) {
 	buf, err := d.json.Peek(maxLen)
 	if err != nil {
 		if err != io.EOF {
-			return nil, err
+			return nil, newReadError(err)
 		}
 	}
 
@@ -479,20 +481,43 @@ func (d *Decoder) peekBoundedQuote(minLen, maxLen int) ([]byte, error) {
 
 	quotePos := bytes.IndexByte(buf, '"')
 	if quotePos < 0 {
-		ch := buf[len(buf)-1]
-		d.json.Discard(len(buf))
-		return nil, d.parseError(ch, fmt.Sprintf("string exceeds expected length %d", maxLen-1))
+		return nil, d.parseError(nil, fmt.Sprintf("string exceeds expected maximum length %d for %s", maxLen-1, label))
 	} else if quotePos < minLen-1 {
-		return nil, d.parseError(buf[0], fmt.Sprintf("string falls short of expected length %d", minLen-1))
+		return nil, d.parseError(nil, fmt.Sprintf("string shorter than expected minimum length %d for %s", minLen-1, label))
 	}
 
 	return buf[0:quotePos], nil
 }
 
+const parseErrorContextLength = 10
+
 // parseError returns an error with a message and some context for where it occurs.
-func (d *Decoder) parseError(ch byte, msg string) error {
-	after, _ := d.json.Peek(20)
-	return fmt.Errorf("parse error: %s on char '%s', followed by '%s...'", msg, string(ch), after)
+func (d *Decoder) parseError(startingAt []byte, msg string) error {
+	if len(startingAt) < parseErrorContextLength {
+		after, err := d.json.Peek(parseErrorContextLength - len(startingAt))
+		if len(after) > 0 {
+			startingAt = append(startingAt, after...)
+		}
+		if err == nil {
+			// Add ellipsis to show there is more
+			startingAt = append(startingAt, '.', '.', '.')
+		}
+	}
+	if len(startingAt) > 0 {
+		return fmt.Errorf("parse error at `%s`: %s", startingAt, msg)
+	}
+	return fmt.Errorf("parse error: %s", msg)
+}
+
+// copyPeek returns a copy of a Peek into the start of the buffer.
+func (d *Decoder) copyPeek(length int) []byte {
+	buf, _ := d.json.Peek(length)
+	if len(buf) == 0 {
+		return nil
+	}
+	out := make([]byte, len(buf))
+	copy(out, buf)
+	return out
 }
 
 // Unmarshal converts a single JSON object to a BSON document.  The function

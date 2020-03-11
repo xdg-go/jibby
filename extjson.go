@@ -230,7 +230,7 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 		return nil, newReadError(err)
 	}
 	if buf[24] != '"' {
-		return nil, d.parseError(buf[24], "ill-formed $oid")
+		return nil, d.parseError(nil, "ill-formed $oid")
 	}
 
 	// extract hex string and convert/write
@@ -238,7 +238,7 @@ func (d *Decoder) convertOID(out []byte) ([]byte, error) {
 	xs := x[0:12]
 	_, err = hex.Decode(xs, buf[0:24])
 	if err != nil {
-		return nil, fmt.Errorf("parse error: objectID conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("objectID conversion: %v", err))
 	}
 	out = append(out, xs...)
 
@@ -336,7 +336,7 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		return nil, d.parseError(ch, "expected value separator or end of object")
+		return nil, d.parseError([]byte{ch}, "expected value separator or end of object")
 	}
 
 	return out, nil
@@ -361,13 +361,13 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		// `YYYY-MM-DDTHH:MM:SS.sss+HH:MM` (29 chars).  Plus we need the closing
 		// quote.  Peek a little further in case extra precision is given
 		// (counter to the spec).
-		buf, err := d.peekBoundedQuote(21, 48)
+		buf, err := d.peekBoundedQuote(21, 48, "ISO 8601 datetime")
 		if err != nil {
 			return nil, err
 		}
 		epochMillis, err := parseISO8601toEpochMillis(buf)
 		if err != nil {
-			return nil, fmt.Errorf("parse error: %v", err)
+			return nil, d.parseError(nil, err.Error())
 		}
 		_, _ = d.json.Discard(len(buf) + 1)
 		var x [8]byte
@@ -401,7 +401,7 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 		binary.LittleEndian.PutUint64(xs, uint64(epochMillis))
 		out = append(out, xs...)
 	default:
-		return nil, d.parseError(ch, "invalid value for $date")
+		return nil, d.parseError([]byte{ch}, "invalid value for $date")
 	}
 
 	// Must end with document terminator
@@ -494,13 +494,13 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 // convertBinarySubType starts after the opening quote of the string holding hex
 // bytes of the value.
 func (d *Decoder) convertBinarySubType(out []byte, subTypeBytePos int) ([]byte, byte, error) {
-	subTypeBytes, err := d.peekBoundedQuote(2, 3)
+	subTypeBytes, err := d.peekBoundedQuote(2, 3, "binary subtype")
 	if err != nil {
 		return nil, 0, err
 	}
 	subType, err := decodeBinarySubType(subTypeBytes)
 	if err != nil {
-		return nil, 0, d.parseError(subTypeBytes[0], err.Error())
+		return nil, 0, d.parseError(nil, err.Error())
 	}
 	overwriteTypeByte(out, subTypeBytePos, subType)
 	_, _ = d.json.Discard(len(subTypeBytes) + 1)
@@ -689,7 +689,7 @@ func (d *Decoder) convertBinary(out []byte) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		return nil, d.parseError(ch, "expected object or string")
+		return nil, d.parseError([]byte{ch}, "expected object or string")
 	}
 
 	// Must end with document terminator
@@ -720,7 +720,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		key, err := d.peekBoundedQuote(7, 8)
+		key, err := d.peekBoundedQuote(7, 8, "valid $binary document keys")
 		if err != nil {
 			return nil, err
 		}
@@ -728,7 +728,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 		switch {
 		case bytes.Equal(key, jsonSubType):
 			if sawSubType {
-				return nil, d.parseError(key[0], "subType repeated")
+				return nil, d.parseError(nil, "subType repeated")
 			}
 			sawSubType = true
 			_, _ = d.json.Discard(len(key) + 1)
@@ -753,7 +753,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 			}
 		case bytes.Equal(key, jsonBase64):
 			if sawBase64 {
-				return nil, d.parseError(key[0], "base64 repeated")
+				return nil, d.parseError(nil, "base64 repeated")
 			}
 			sawBase64 = true
 			_, _ = d.json.Discard(len(key) + 1)
@@ -777,7 +777,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 				}
 			}
 		default:
-			return nil, d.parseError(key[0], "invalid key for $binary document")
+			return nil, d.parseError(nil, "invalid key for $binary document")
 		}
 		if sawBase64 && sawSubType {
 			break
@@ -839,12 +839,12 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := d.peekBoundedQuote(6, 6)
+	key, err := d.peekBoundedQuote(6, 6, "$type")
 	if err != nil {
 		return nil, err
 	}
 	if !bytes.Equal(key, jsonType) {
-		return nil, d.parseError(key[0], "expected $type")
+		return nil, d.parseError(nil, "expected $type")
 	}
 	_, _ = d.json.Discard(len(key) + 1)
 	err = d.readNameSeparator()
@@ -990,16 +990,16 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		key, err := d.peekBoundedQuote(4, 5)
+		key, err := d.peekBoundedQuote(4, 5, "valid $dbPointer document keys")
 		if err != nil {
-			return nil, newReadError(err)
+			return nil, err
 		}
 
 		// Handle the key.
 		switch {
 		case bytes.Equal(key, jsonRef):
 			if sawRef {
-				return nil, d.parseError(key[0], "key '$ref' repeated")
+				return nil, d.parseError(nil, "key '$ref' repeated")
 			}
 			sawRef = true
 			_, _ = d.json.Discard(len(key) + 1)
@@ -1027,7 +1027,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 			}
 		case bytes.Equal(key, jsonID):
 			if sawID {
-				return nil, d.parseError(key[0], "key '$id' repeated")
+				return nil, d.parseError(nil, "key '$id' repeated")
 			}
 			sawID = true
 			_, _ = d.json.Discard(len(key) + 1)
@@ -1036,14 +1036,16 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				return nil, err
 			}
 			// Value must be of type object ID.  Read the value into a temporary
-			// buffer, reserving the first byte for discovered type.
+			// buffer, reserving the first byte for discovered type.  Copy the
+			// start of the reader for error reporting.
+			peek := d.copyPeek(parseErrorContextLength)
 			id = make([]byte, 1, 13)
 			id, err = d.convertValue(id, 0)
 			if err != nil {
 				return nil, err
 			}
 			if id[0] != bsonObjectID {
-				return nil, fmt.Errorf("parse error: $dbPointer.$id must be BSON type %d, not type %d", bsonObjectID, id[0])
+				return nil, d.parseError(peek, fmt.Sprintf("$dbPointer.$id must be BSON type %d, not type %d", bsonObjectID, id[0]))
 			}
 
 			// If we haven't seen the other key, we expect to see a separator.
@@ -1054,7 +1056,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				}
 			}
 		default:
-			return nil, d.parseError(key[0], "invalid key for $dbPointer document")
+			return nil, d.parseError(nil, "invalid key for $dbPointer document")
 		}
 		if sawRef && sawID {
 			break
@@ -1094,14 +1096,14 @@ func (d *Decoder) convertNumberInt(out []byte) ([]byte, error) {
 	}
 
 	// Peek at least 2 and up to 12 chars (for '-2147483648' plus closing quote).
-	buf, err := d.peekBoundedQuote(2, 12)
+	buf, err := d.peekBoundedQuote(2, 12, "int32")
 	if err != nil {
 		return nil, err
 	}
 
 	n, err := strconv.ParseInt(string(buf), 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: int conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("int conversion: %v", err))
 	}
 	var x [4]byte
 	xs := x[0:4]
@@ -1150,26 +1152,26 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, newReadError(err)
 		}
-		err = d.readNextChar('"')
-		if err != nil {
-			return nil, err
-		}
-		err = d.readNameSeparator()
-		if err != nil {
-			return nil, err
-		}
-		err = d.skipWS()
-		if err != nil {
-			return nil, err
-		}
 
 		// Handle the key.
 		switch ch {
 		case 't':
 			if sawT {
-				return nil, d.parseError(ch, "key 't' repeated")
+				return nil, d.parseError([]byte{ch}, "key 't' repeated")
 			}
 			sawT = true
+			err = d.readNextChar('"')
+			if err != nil {
+				return nil, err
+			}
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			err = d.skipWS()
+			if err != nil {
+				return nil, err
+			}
 			timestamp, err = d.readUint32()
 			if err != nil {
 				return nil, err
@@ -1183,9 +1185,22 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 			}
 		case 'i':
 			if sawI {
-				return nil, d.parseError(ch, "key 'i' repeated")
+				return nil, d.parseError([]byte{ch}, "key 'i' repeated")
 			}
 			sawI = true
+			err = d.readNextChar('"')
+			if err != nil {
+				return nil, err
+			}
+			err = d.readNameSeparator()
+			if err != nil {
+				return nil, err
+			}
+			err = d.skipWS()
+			if err != nil {
+				return nil, err
+			}
+
 			increment, err = d.readUint32()
 			if err != nil {
 				return nil, err
@@ -1198,7 +1213,7 @@ func (d *Decoder) convertTimestamp(out []byte) ([]byte, error) {
 				}
 			}
 		default:
-			return nil, d.parseError(ch, "invalid key for $timestamp document")
+			return nil, d.parseError([]byte{ch}, "invalid key for $timestamp document")
 		}
 		if sawT && sawI {
 			break
@@ -1246,7 +1261,7 @@ func (d *Decoder) convertUndefined(out []byte) ([]byte, error) {
 		return nil, newReadError(err)
 	}
 	if !bytes.Equal(buf, []byte{'r', 'u', 'e'}) {
-		return nil, d.parseError('t', "expected 'true'")
+		return nil, d.parseError([]byte{'t'}, "expected 'true'")
 	}
 
 	_, _ = d.json.Discard(3)
@@ -1274,14 +1289,14 @@ func (d *Decoder) convertNumberLong(out []byte) ([]byte, error) {
 	}
 
 	// Peek at least 2 and up to 21 chars (for '-9223372036854775808' plus closing quote).
-	buf, err := d.peekBoundedQuote(2, 21)
+	buf, err := d.peekBoundedQuote(2, 21, "int64")
 	if err != nil {
 		return nil, err
 	}
 
 	n, err := strconv.ParseInt(string(buf), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: int conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("int conversion: %v", err))
 	}
 	var x [8]byte
 	xs := x[0:8]
@@ -1314,14 +1329,14 @@ func (d *Decoder) convertNumberDouble(out []byte) ([]byte, error) {
 	}
 
 	// Peek at least 2 and up to doublePeekWidth chars (for long '0.0000...1' plus closing quote).
-	buf, err := d.peekBoundedQuote(2, doublePeekWidth)
+	buf, err := d.peekBoundedQuote(2, doublePeekWidth, "float64")
 	if err != nil {
 		return nil, err
 	}
 
 	n, err := strconv.ParseFloat(string(buf), 64)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: float conversion: %v", err)
+		return nil, d.parseError(nil, fmt.Sprintf("float conversion: %v", err))
 	}
 
 	var x [8]byte
@@ -1361,14 +1376,14 @@ func (d *Decoder) convertNumberDecimal(out []byte) ([]byte, error) {
 	}
 
 	// Peek at least 2 and up to decimalPeekWidth chars (for long '0.0000...1' plus closing quote).
-	buf, err := d.peekBoundedQuote(2, decimalPeekWidth)
+	buf, err := d.peekBoundedQuote(2, decimalPeekWidth, "decimal128")
 	if err != nil {
 		return nil, err
 	}
 
 	d128, err := primitive.ParseDecimal128(string(buf))
 	if err != nil {
-		return nil, fmt.Errorf("parse error: decimal128 conversion: %v", err)
+		return nil, d.parseError(nil, "can't parse Decimal128")
 	}
 
 	hi, lo := d128.GetBytes()
@@ -1417,16 +1432,16 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		key, err := d.peekBoundedQuote(8, 8)
+		key, err := d.peekBoundedQuote(8, 8, "valid $regularExpression keys")
 		if err != nil {
-			return nil, newReadError(err)
+			return nil, err
 		}
 
 		// Handle the key.
 		switch {
 		case bytes.Equal(key, jsonREpattern):
 			if sawPattern {
-				return nil, d.parseError(key[0], "key 'pattern' repeated")
+				return nil, d.parseError(nil, "key 'pattern' repeated")
 			}
 			sawPattern = true
 			_, _ = d.json.Discard(len(key))
@@ -1458,7 +1473,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 			}
 		case bytes.Equal(key, jsonREoptions):
 			if sawOptions {
-				return nil, d.parseError(key[0], "key 'options' repeated")
+				return nil, d.parseError(nil, "key 'options' repeated")
 			}
 			sawOptions = true
 			_, _ = d.json.Discard(len(key))
@@ -1475,6 +1490,9 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
+			// Copy options to separate data for validation/sorting.  Keep
+			// a copy of the original reader for error reporting.
+			peek := d.copyPeek(parseErrorContextLength)
 			options = make([]byte, 0, 256)
 			options, err = d.convertCString(options)
 			if err != nil {
@@ -1485,7 +1503,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 			if len(options) > 1 {
 				err = sortOptions(options[0 : len(options)-1])
 				if err != nil {
-					return nil, err
+					return nil, d.parseError(peek, err.Error())
 				}
 			}
 
@@ -1497,7 +1515,7 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				}
 			}
 		default:
-			return nil, d.parseError(key[0], "invalid key for $regularExpression document")
+			return nil, d.parseError(nil, "invalid key for $regularExpression document")
 		}
 		if sawPattern && sawOptions {
 			break
@@ -1561,7 +1579,7 @@ func (d *Decoder) convertBase64(out []byte) ([]byte, error) {
 		if len(buf) > 0 {
 			n, err := enc.Decode(xs, buf)
 			if err != nil {
-				return nil, d.parseError(buf[0], fmt.Sprintf("error parsing base64 data: %s", err))
+				return nil, d.parseError(nil, fmt.Sprintf("error parsing base64 data: %s", err))
 			}
 			out = append(out, xs[0:n]...)
 			_, _ = d.json.Discard(len(buf))
@@ -1590,7 +1608,7 @@ func parseISO8601toEpochMillis(data []byte) (int64, error) {
 		}
 	}
 	if err != nil {
-		return 0, fmt.Errorf("invalid $date value string: %s", string(data))
+		return 0, fmt.Errorf("invalid $date value string")
 	}
 
 	return t.Unix()*1e3 + int64(t.Nanosecond())/1e6, nil
@@ -1602,7 +1620,7 @@ func sortOptions(opts []byte) error {
 		switch opts[i] {
 		case 'i', 'l', 'm', 's', 'u', 'x':
 		default:
-			return fmt.Errorf("parse error: invalid regular expression option '%c'", opts[i])
+			return fmt.Errorf("invalid regular expression option '%c'", opts[i])
 		}
 	}
 	return nil

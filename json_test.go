@@ -105,27 +105,27 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "invalid unicode escape",
 			input:  `{"a" : "\u00zz"}`,
-			errStr: "parse error: converting unicode escape",
+			errStr: "converting unicode escape",
 		},
 		{
 			label:  "invalid unicode escape",
 			input:  `{"a" : "\u+062"}`,
-			errStr: "parse error: converting unicode escape",
+			errStr: "converting unicode escape",
 		},
 		{
 			label:  "invalid unicode escape",
 			input:  `{"a" : "\u-062"}`,
-			errStr: "parse error: converting unicode escape",
+			errStr: "converting unicode escape",
 		},
 		{
 			label:  "unknown escape",
 			input:  `{"a" : "\U00e9"}`,
-			errStr: "parse error: unknown escape",
+			errStr: "unknown escape",
 		},
 		{
 			label:  "control character unescaped",
 			input:  "{\"a\" : \"\x07\"}",
-			errStr: "parse error: control characters",
+			errStr: "control characters",
 		},
 		// Int32
 		{
@@ -156,7 +156,7 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "bad int",
 			input:  `{"d" : 1234abc}`,
-			errStr: "parse error: int conversion",
+			errStr: "int conversion",
 		},
 		{
 			label:  "bad int with underscore",
@@ -166,7 +166,7 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "bad int",
 			input:  `{"d" : -+1234}`,
-			errStr: "parse error: invalid character",
+			errStr: "invalid character",
 		},
 		{
 			label:  "leading zero",
@@ -233,22 +233,22 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "bad float trailing decimal",
 			input:  `{"d" : 1.}`,
-			errStr: "parse error: decimal must be followed by digit",
+			errStr: "decimal must be followed by digit",
 		},
 		{
 			label:  "bad float decimal without number",
 			input:  `{"d" : 1.e1}`,
-			errStr: "parse error: decimal must be followed by digit",
+			errStr: "decimal must be followed by digit",
 		},
 		{
 			label:  "-.0",
 			input:  `{"d":-.0}`,
-			errStr: "parse error: invalid character",
+			errStr: "invalid character",
 		},
 		{
 			label:  "bad float",
 			input:  `{"d" : -1.0a0}`,
-			errStr: "parse error: float conversion",
+			errStr: "float conversion",
 		},
 		{
 			label:  "number too long to parse",
