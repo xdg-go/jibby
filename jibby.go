@@ -504,9 +504,9 @@ func (d *Decoder) parseError(startingAt []byte, msg string) error {
 		}
 	}
 	if len(startingAt) > 0 {
-		return fmt.Errorf("parse error at `%s`: %s", startingAt, msg)
+		return &ParseError{msg: fmt.Sprintf("parse error at `%s`: %s", startingAt, msg)}
 	}
-	return fmt.Errorf("parse error: %s", msg)
+	return &ParseError{fmt.Sprintf("parse error: %s", msg)}
 }
 
 // copyPeek returns a copy of a Peek into the start of the buffer.
