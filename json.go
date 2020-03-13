@@ -115,10 +115,7 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 			// Put back quote so that handleExtJSON gets a valid start
 			// for convertObject, as some types need to parse it to a scratch
 			// buffer.
-			err = d.json.UnreadByte()
-			if err != nil {
-				panic(err)
-			}
+			_ = d.json.UnreadByte()
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
 				return nil, err

@@ -164,6 +164,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1A0000000F61001200000005000000C3A9006400050000000000",
 		},
 		{
+			label:  "$code and other field",
+			input:  `{"a" : {"$code" : "\u00e9\u0000d", "_scope" : {}}}`,
+			errStr: `expected "$scope"`,
+		},
+		{
 			label:  "$timestamp",
 			input:  `{"a" : {"$timestamp" : {"t" : 123456789, "i" : 42} } }`,
 			output: "100000001161002A00000015CD5B0700",
@@ -189,9 +194,34 @@ func TestExtJSON(t *testing.T) {
 			errStr: "invalid character in number",
 		},
 		{
+			label:  "$timestamp, bad i number 3",
+			input:  `{"":{"$timestamp":{"t":0,"i":-1}}}`,
+			errStr: "negative number not allowed",
+		},
+		{
+			label:  "$timestamp, bad i number 4",
+			input:  `{"":{"$timestamp":{"t":0,"i":-}}}`,
+			errStr: "number not found",
+		},
+		{
+			label:  "$timestamp, bad i number 5",
+			input:  `{"":{"$timestamp":{"t":0,"i":111111111111111111111111111111}}}`,
+			errStr: "number too long",
+		},
+		{
+			label:  "$timestamp, bad i number 6",
+			input:  `{"":{"$timestamp":{"t":0,"i":1.0}}}`,
+			errStr: "uint conversion",
+		},
+		{
 			label:  "$timestamp, missing i number",
 			input:  `{"":{"$timestamp":{"t":0,"i":}}}`,
 			errStr: "number not found",
+		},
+		{
+			label:  "$timestamp, bad field",
+			input:  `{"":{"$timestamp":{"time":0,"i":}}}`,
+			errStr: `expecting '"'`,
 		},
 		{
 			label:  "$regularExpression",
@@ -294,6 +324,11 @@ func TestExtJSON(t *testing.T) {
 			output: "1000000009610000DC1FD277E6000000",
 		},
 		{
+			label:  "$date, bad numeric literal",
+			input:  `{"a":{"$date":253402.300800000}}`,
+			errStr: `int conversion`,
+		},
+		{
 			label:  "$date, bad ISO 8601",
 			input:  `{"a" : {"$date" : "1970.01.01T00.00.00Z"}}`,
 			errStr: `invalid $date value string`,
@@ -379,9 +414,64 @@ func TestExtJSON(t *testing.T) {
 			output: "3600000003002f00000002246f7074696f6e730001000000000224726567657800040000006162630002246e65000200000061000000",
 		},
 		{
-			label:  "$regex not extended JSON nor query 3",
-			input:  `{"":{"$regex":"abc","$options" : "im", "$ne":"a"}}`,
-			output: "380000000300310000000224726567657800040000006162630002246f7074696f6e730003000000696d0002246e65000200000061000000",
+			label:  "$prefixed long key",
+			input:  `{"a":{"$reallyreallyreallylongstring":{"$numberInt":"1"}}}`,
+			output: "300000000361002800000010247265616c6c797265616c6c797265616c6c796c6f6e67737472696e6700010000000000",
+		},
+		{
+			label:  "length 2 not extended JSON",
+			input:  `{"a":{"$a":{"$numberInt":"1"}}}`,
+			output: "150000000361000d00000010246100010000000000",
+		},
+		{
+			label:  "length 4 not extended JSON",
+			input:  `{"a":{"$aaa":{"$numberInt":"1"}}}`,
+			output: "170000000361000f000000102461616100010000000000",
+		},
+		{
+			label:  "length 5 not extended JSON",
+			input:  `{"a":{"$aaaa":{"$numberInt":"1"}}}`,
+			output: "180000000361001000000010246161616100010000000000",
+		},
+		{
+			label:  "length 6 not extended JSON",
+			input:  `{"a":{"$aaaaa":{"$numberInt":"1"}}}`,
+			output: "19000000036100110000001024616161616100010000000000",
+		},
+		{
+			label:  "length 7 not extended JSON",
+			input:  `{"a":{"$aaaaaa":{"$numberInt":"1"}}}`,
+			output: "1a00000003610012000000102461616161616100010000000000",
+		},
+		{
+			label:  "length 8 not extended JSON",
+			input:  `{"a":{"$aaaaaaa":{"$numberInt":"1"}}}`,
+			output: "1b0000000361001300000010246161616161616100010000000000",
+		},
+		{
+			label:  "length 10 not extended JSON",
+			input:  `{"a":{"$aaaaaaaaa":{"$numberInt":"1"}}}`,
+			output: "1d00000003610015000000102461616161616161616100010000000000",
+		},
+		{
+			label:  "length 11 not extended JSON",
+			input:  `{"a":{"$aaaaaaaaaa":{"$numberInt":"1"}}}`,
+			output: "1e0000000361001600000010246161616161616161616100010000000000",
+		},
+		{
+			label:  "length 13 not extended JSON",
+			input:  `{"a":{"$aaaaaaaaaaaa":{"$numberInt":"1"}}}`,
+			output: "2000000003610018000000102461616161616161616161616100010000000000",
+		},
+		{
+			label:  "length 14 not extended JSON",
+			input:  `{"a":{"$aaaaaaaaaaaaa":{"$numberInt":"1"}}}`,
+			output: "210000000361001900000010246161616161616161616161616100010000000000",
+		},
+		{
+			label:  "length 18 not extended JSON",
+			input:  `{"a":{"$aaaaaaaaaaaaaaaaa":{"$numberInt":"1"}}}`,
+			output: "250000000361001d0000001024616161616161616161616161616161616100010000000000",
 		},
 	}
 

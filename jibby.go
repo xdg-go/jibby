@@ -255,9 +255,6 @@ func (d *Decoder) readSpecificKey(expected []byte) error {
 		return err
 	}
 	if !bytes.Equal(key, expected) {
-		if len(key) > 0 {
-			return d.parseError(nil, fmt.Sprintf("expected %q", string(expected)))
-		}
 		return d.parseError(nil, fmt.Sprintf("expected %q", string(expected)))
 	}
 	_, _ = d.json.Discard(len(key) + 1)
@@ -326,7 +323,7 @@ LOOP:
 	num := buf[0:i]
 
 	// Check for optional leading minus; skip it for other validation
-	if len(num) > 1 && num[0] == '-' {
+	if len(num) >= 1 && num[0] == '-' {
 		num = num[1:]
 	}
 

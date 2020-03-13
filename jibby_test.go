@@ -356,7 +356,13 @@ func TestStreaming(t *testing.T) {
 func TestDepthLimit(t *testing.T) {
 	t.Parallel()
 
-	input := `{"1":{"2":{"3":[{"5":"a"}]}}}`
+	testDepthLimit(t, `{"1":{"2":{"3":[{"5":"a"}]}}}`)
+	testDepthLimit(t, `{"1":{"2":{"3":[["5","a"]]}}}`)
+}
+
+func testDepthLimit(t *testing.T, input string) {
+	t.Helper()
+
 	out := make([]byte, 0)
 
 	jib, err := NewDecoder(bufio.NewReader(bytes.NewReader([]byte(input))))
@@ -378,4 +384,5 @@ func TestDepthLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error and got: %v", err)
 	}
+
 }

@@ -193,6 +193,11 @@ func TestUnmarshal(t *testing.T) {
 			input:  `{"d" : +1}`,
 			errStr: "invalid character",
 		},
+		{
+			label:  "number missing",
+			input:  `{"d" : -}`,
+			errStr: "number not found",
+		},
 		// Int64
 		{
 			label:  "MinInt64",
