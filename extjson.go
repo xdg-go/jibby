@@ -814,7 +814,7 @@ func (d *Decoder) convertV2Binary(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// convertV2Binary is called after the opening quote of the base64 payload. v1
+// convertV1Binary is called after the opening quote of the base64 payload. v1
 // $binary is a string, followed by "$type" and no other keys.
 func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	// Write a length placeholder and a subtype byte placeholder

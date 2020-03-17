@@ -326,7 +326,7 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "second value key not string",
 			input:  `{ "a": 457, 123:456 }`,
-			errStr: "expecting key",
+			errStr: "expecting opening quote of key",
 		},
 		{
 			label:  "first value missing colon",

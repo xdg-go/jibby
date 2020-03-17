@@ -223,7 +223,7 @@ func (d *Decoder) readNameSeparator() error {
 	return nil
 }
 
-// readNameSeparator expects the '}' character after optional white space and
+// readObjectTerminator expects the '}' character after optional white space and
 // errors if it is not found.  It handles other errors like readCharAfterWS.
 func (d *Decoder) readObjectTerminator() error {
 	err := d.readCharAfterWS('}')
@@ -233,7 +233,7 @@ func (d *Decoder) readObjectTerminator() error {
 	return nil
 }
 
-// readNameSeparator expects the '"' character after optional white space and
+// readQuoteStart expects the '"' character after optional white space and
 // errors if it is not found.  It handles other errors like readCharAfterWS.
 func (d *Decoder) readQuoteStart() error {
 	err := d.readCharAfterWS('"')
@@ -241,6 +241,35 @@ func (d *Decoder) readQuoteStart() error {
 		return err
 	}
 	return nil
+}
+
+// peekBoundedQuote peeks into the input stream for a series of non-quote
+// characters terminated by a closing quote.  The function takes a minimum and
+// maximum length (including closing quote) and errors if it can't find a
+// sequence plus quote within those boundaries.  The byte slice returned
+// *excludes* the closing quote.  Nothing is consumed from the input stream.
+//
+// NOTE: JSON string escapes (`\n`, etc.) are not supported/interpreted.
+func (d *Decoder) peekBoundedQuote(minLen, maxLen int, label string) ([]byte, error) {
+	buf, err := d.json.Peek(maxLen)
+	if err != nil {
+		if err != io.EOF {
+			return nil, newReadError(err)
+		}
+	}
+
+	if len(buf) < minLen {
+		return nil, newReadError(io.ErrUnexpectedEOF)
+	}
+
+	quotePos := bytes.IndexByte(buf, '"')
+	if quotePos < 0 {
+		return nil, d.parseError(nil, fmt.Sprintf("string exceeds expected maximum length %d for %s", maxLen-1, label))
+	} else if quotePos < minLen-1 {
+		return nil, d.parseError(nil, fmt.Sprintf("string shorter than expected minimum length %d for %s", minLen-1, label))
+	}
+
+	return buf[0:quotePos], nil
 }
 
 // readSpecificKey expects and consumes a specific series of bytes representing
@@ -455,35 +484,6 @@ func (d *Decoder) readInt64() (int64, error) {
 	}
 	_, _ = d.json.Discard(len(buf))
 	return int64(n), nil
-}
-
-// peekBoundedQuote peeks into the input stream for a series of non-quote
-// characters terminated by a closing quote.  The function takes a minimum and
-// maximum length (including closing quote) and errors if it can't find a
-// sequence plus quote within those boundaries.  The byte slice returned
-// *excludes* the closing quote.  Nothing is consumed from the input stream.
-//
-// NOTE: JSON string escapes (`\n`, etc.) are not supported/interpreted.
-func (d *Decoder) peekBoundedQuote(minLen, maxLen int, label string) ([]byte, error) {
-	buf, err := d.json.Peek(maxLen)
-	if err != nil {
-		if err != io.EOF {
-			return nil, newReadError(err)
-		}
-	}
-
-	if len(buf) < minLen {
-		return nil, newReadError(io.ErrUnexpectedEOF)
-	}
-
-	quotePos := bytes.IndexByte(buf, '"')
-	if quotePos < 0 {
-		return nil, d.parseError(nil, fmt.Sprintf("string exceeds expected maximum length %d for %s", maxLen-1, label))
-	} else if quotePos < minLen-1 {
-		return nil, d.parseError(nil, fmt.Sprintf("string shorter than expected minimum length %d for %s", minLen-1, label))
-	}
-
-	return buf[0:quotePos], nil
 }
 
 const parseErrorContextLength = 10

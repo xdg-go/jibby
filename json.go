@@ -84,7 +84,6 @@ func (d *Decoder) convertValue(out []byte, typeBytePos int) ([]byte, error) {
 func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error) {
 	var ch byte
 	var err error
-	var typeBytePos int
 
 	// Depth check
 	d.curDepth++
@@ -109,12 +108,12 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 		out = append(out, emptyDoc...)
 		return out, nil
 	case '"':
+		// Put back quote for subsequent object parsing
+		_ = d.json.UnreadByte()
+
 		// If ExtJSON enabled and `handleExtJSON` returns a buffer, then this
 		// value was extended JSON and the value has been consumed.
 		if d.extJSONAllowed && outerTypeBytePos != topContainer {
-			// Put back quote so that handleExtJSON gets a valid start
-			// for convertObject, as some types need to parse it to a scratch
-			// buffer.
 			_ = d.json.UnreadByte()
 			buf, err := d.handleExtJSON(out, outerTypeBytePos)
 			if err != nil {
@@ -123,35 +122,18 @@ func (d *Decoder) convertObject(out []byte, outerTypeBytePos int) ([]byte, error
 			if buf != nil {
 				return buf, nil
 			}
-			// Not extended JSON so re-read the quote we put back.
-			_, _ = d.json.ReadByte()
 		}
 
 		// Not extended JSON, so now write the length placeholder
 		out = append(out, emptyLength...)
 		overwriteTypeByte(out, outerTypeBytePos, bsonDocument)
 
-		// Record position for the placeholder type byte
-		typeBytePos = len(out)
-		out = append(out, emptyType)
-
-		// Convert key as Cstring
-		out, err = d.convertCString(out)
-		if err != nil {
-			return nil, err
-		}
 	default:
 		return nil, d.parseError([]byte{ch}, "expecting key or end of object")
 	}
 
-	// Next non-WS char must be ':' for separator
-	err = d.readNameSeparator()
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert first value of object
-	out, err = d.convertValue(out, typeBytePos)
+	// Convert the first element
+	out, err = d.convertObjectElement(out)
 	if err != nil {
 		return nil, err
 	}
@@ -165,33 +147,8 @@ LOOP:
 		}
 		switch ch {
 		case ',':
-			// Next non-WS character must be quote to start key
-			ch, err = d.readAfterWS()
-			if err != nil {
-				return nil, newReadError(err)
-			}
-			if ch != '"' {
-				return nil, d.parseError([]byte{ch}, "expecting key")
-			}
-
-			// Record position for the placeholder type byte that we write
-			typeBytePos = len(out)
-			out = append(out, emptyType)
-
-			// Convert key as Cstring
-			out, err = d.convertCString(out)
-			if err != nil {
-				return nil, err
-			}
-
-			// Next non-WS char must be ':' for separator
-			err = d.readNameSeparator()
-			if err != nil {
-				return nil, err
-			}
-
-			// Convert next value
-			out, err = d.convertValue(out, typeBytePos)
+			// Convert next element
+			out, err = d.convertObjectElement(out)
 			if err != nil {
 				return nil, err
 			}
@@ -210,7 +167,42 @@ LOOP:
 	return out, nil
 }
 
-// convertObject starts after the opening bracket of an array.
+func (d *Decoder) convertObjectElement(out []byte) ([]byte, error) {
+	// Next non-WS character must be quote to start key
+	ch, err := d.readAfterWS()
+	if err != nil {
+		return nil, newReadError(err)
+	}
+	if ch != '"' {
+		return nil, d.parseError([]byte{ch}, "expecting opening quote of key")
+	}
+
+	// Record position for the placeholder type byte that we write
+	typeBytePos := len(out)
+	out = append(out, emptyType)
+
+	// Convert key as Cstring
+	out, err = d.convertCString(out)
+	if err != nil {
+		return nil, err
+	}
+
+	// Next non-WS char must be ':' for separator
+	err = d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert next value
+	out, err = d.convertValue(out, typeBytePos)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+// convertArray starts after the opening bracket of an array.
 func (d *Decoder) convertArray(out []byte) ([]byte, error) {
 	var ch byte
 	var err error
@@ -242,19 +234,9 @@ func (d *Decoder) convertArray(out []byte) ([]byte, error) {
 	// Not empty: unread the byte for convertValue to check
 	_ = d.json.UnreadByte()
 
-	// Record position for the placeholder type byte that we write
-	typeBytePos := len(out)
-
-	// Append type byte and empty string null terminator (no key)
-	out = append(out, emptyType)
-
-	// Start counting array entries for keys and append the first key
+	// Convert the first value
 	index := 0
-	out = append(out, arrayKey[index]...)
-	out = append(out, nullByte)
-
-	// Convert first value
-	out, err = d.convertValue(out, typeBytePos)
+	out, err = d.convertArrayElement(out, index)
 	if err != nil {
 		return nil, err
 	}
@@ -269,23 +251,9 @@ LOOP:
 
 		switch ch {
 		case ',':
-			// Record position for the placeholder type byte that we write
-			typeBytePos := len(out)
-
-			// Append type byte
-			out = append(out, emptyType)
-
-			// Append next key
+			// Convert the next value
 			index++
-			if index < len(arrayKey) {
-				out = append(out, arrayKey[index]...)
-			} else {
-				out = append(out, []byte(strconv.Itoa(index))...)
-			}
-			out = append(out, nullByte)
-
-			// Convert next value
-			out, err = d.convertValue(out, typeBytePos)
+			out, err = d.convertArrayElement(out, index)
 			if err != nil {
 				return nil, err
 			}
@@ -300,6 +268,28 @@ LOOP:
 	out = append(out, nullByte)
 	arrayLength := len(out) - lengthPos
 	overwriteLength(out, lengthPos, arrayLength)
+
+	return out, nil
+}
+
+func (d *Decoder) convertArrayElement(out []byte, index int) ([]byte, error) {
+	// Record position for the placeholder type byte
+	typeBytePos := len(out)
+	out = append(out, emptyType)
+
+	// Append next key
+	if index < len(arrayKey) {
+		out = append(out, arrayKey[index]...)
+	} else {
+		out = append(out, []byte(strconv.Itoa(index))...)
+	}
+	out = append(out, nullByte)
+
+	// Convert next value
+	out, err := d.convertValue(out, typeBytePos)
+	if err != nil {
+		return nil, err
+	}
 
 	return out, nil
 }
@@ -323,7 +313,7 @@ func (d *Decoder) convertTrue(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// convertTrue starts after the 'f' for false has been read.
+// convertFalse starts after the 'f' for false has been read.
 func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	rest, err := d.json.Peek(4)
 	if err != nil {
@@ -342,7 +332,7 @@ func (d *Decoder) convertFalse(out []byte) ([]byte, error) {
 	return out, nil
 }
 
-// convertTrue starts after the 'n' for null has been read.
+// convertNull starts after the 'n' for null has been read.
 func (d *Decoder) convertNull(out []byte) ([]byte, error) {
 	rest, err := d.json.Peek(3)
 	if err != nil {
