@@ -35,7 +35,7 @@ func TestJSONTestSuite_Passing(t *testing.T) {
 	}
 }
 
-// TestJibbyTestSuite_Passing tests additional cases in the
+// TestJibbyTestSuite_Passing tests a local corpus in the
 // same format as the seriot.ch corpus that must pass.
 func TestJibbyTestSuite_Passing(t *testing.T) {
 	t.Helper()
@@ -135,8 +135,8 @@ func TestJSONTestSuite_Failing(t *testing.T) {
 	}
 }
 
-// TestJibbyTestSuite_Failing tests the seriot.ch corpus for
-// cases that must error.
+// TestJibbyTestSuite_Passing tests a local corpus in the
+// same format as the seriot.ch corpus that must error.
 func TestJibbyTestSuite_Failing(t *testing.T) {
 	t.Parallel()
 

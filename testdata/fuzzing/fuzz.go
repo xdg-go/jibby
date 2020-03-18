@@ -54,6 +54,10 @@ func FuzzJSON(data []byte) int {
 	_, jibbyErr := jibby.Unmarshal(data, jibbyOut)
 
 	if jibbyErr != nil && jsonErr == nil {
+		// jibby errors on long decimals that json allows
+		if strings.Contains(jibbyErr.Error(), "number too long") {
+			return 0
+		}
 		fmt.Printf("input : %s\n", trim(string(data)))
 		panic(fmt.Sprintf("jibby errors when json succeeds: %v", jibbyErr))
 	}
