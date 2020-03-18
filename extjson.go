@@ -430,7 +430,7 @@ func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 
 	var sawBinary, sawType, sawOther int
 	var binaryValue, subTypeValue bson.RawValue
-	elements, err := bson.Raw(scratch).Elements()
+	elements, _ := bson.Raw(scratch).Elements()
 	for _, e := range elements {
 		switch e.Key() {
 		case "$binary":
@@ -615,7 +615,7 @@ func (d *Decoder) convertRegexOptionsSlowPath(out []byte, typeBytePos int) ([]by
 
 	var sawRegex, sawOptions, sawOther int
 	var regexValue, optionsValue bson.RawValue
-	elements, err := bson.Raw(scratch).Elements()
+	elements, _ := bson.Raw(scratch).Elements()
 	for _, e := range elements {
 		switch e.Key() {
 		case "$regex":

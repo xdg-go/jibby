@@ -8,7 +8,7 @@ import (
 
 func TestParseError(t *testing.T) {
 	var buf []byte
-	buf, err := Unmarshal([]byte(`{,}`), buf)
+	_, err := Unmarshal([]byte(`{,}`), buf)
 	if err == nil {
 		t.Fatal("expected error but got nil")
 	}
