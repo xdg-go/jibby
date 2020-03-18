@@ -278,7 +278,10 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 	}
 
 	// Make a copy of code cstring to defer writing.
-	codeCString := make([]byte, 0, 256)
+	scratchP := d.scratchPool.Get().(*[]byte)
+	defer func() { d.scratchPool.Put(scratchP) }()
+	codeCString := (*scratchP)[0:0]
+
 	codeCString, err = d.convertCString(codeCString)
 	if err != nil {
 		return nil, err
@@ -419,10 +422,10 @@ func (d *Decoder) convertDate(out []byte) ([]byte, error) {
 func (d *Decoder) convertType(out []byte, typeBytePos int) ([]byte, error) {
 	// Slow path: look for exactly $type and $binary
 	var err error
-	scratch := d.scratchPool.Get().([]byte)
-	defer func() { d.scratchPool.Put(scratch) }()
+	scratchP := d.scratchPool.Get().(*[]byte)
+	defer func() { d.scratchPool.Put(scratchP) }()
+	scratch := (*scratchP)[0:0]
 
-	scratch = scratch[0:0]
 	scratch, err = d.convertObject(scratch, topContainer)
 	if err != nil {
 		return nil, err
@@ -523,7 +526,10 @@ func (d *Decoder) convertScope(out []byte) ([]byte, error) {
 	out = append(out, emptyLength...)
 
 	// Copy $scope into a temporary BSON document
-	scopeDoc := make([]byte, 0, 256)
+	scratchP := d.scratchPool.Get().(*[]byte)
+	defer func() { d.scratchPool.Put(scratchP) }()
+	scopeDoc := (*scratchP)[0:0]
+
 	err = d.readCharAfterWS('{')
 	if err != nil {
 		return nil, err
@@ -604,10 +610,10 @@ func (d *Decoder) convertRegex(out []byte, typeBytePos int) ([]byte, error) {
 func (d *Decoder) convertRegexOptionsSlowPath(out []byte, typeBytePos int) ([]byte, error) {
 
 	var err error
-	scratch := d.scratchPool.Get().([]byte)
-	defer func() { d.scratchPool.Put(scratch) }()
+	scratchP := d.scratchPool.Get().(*[]byte)
+	defer func() { d.scratchPool.Put(scratchP) }()
+	scratch := (*scratchP)[0:0]
 
-	scratch = scratch[0:0]
 	scratch, err = d.convertObject(scratch, topContainer)
 	if err != nil {
 		return nil, err
@@ -981,9 +987,11 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 
 	// Need to see exactly 2 keys, '$ref' and '$id', in any order.
 	var ref []byte
-	var id []byte
 	var sawRef bool
 	var sawID bool
+	// Start id with an empty byte for writing type
+	var idBuf [13]byte
+	id := idBuf[0:1]
 	for {
 		// Read the opening quote of the key and peek the key.
 		err := d.readQuoteStart()
@@ -1012,7 +1020,9 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
-			ref = make([]byte, 0, 256)
+			scratchP := d.scratchPool.Get().(*[]byte)
+			defer func() { d.scratchPool.Put(scratchP) }()
+			ref = (*scratchP)[0:0]
 			ref, err = d.convertString(ref)
 			if err != nil {
 				return nil, err
@@ -1039,7 +1049,7 @@ func (d *Decoder) convertDBPointer(out []byte) ([]byte, error) {
 			// buffer, reserving the first byte for discovered type.  Copy the
 			// start of the reader for error reporting.
 			peek := d.copyPeek(parseErrorContextLength)
-			id = make([]byte, 1, 13)
+
 			id, err = d.convertValue(id, 0)
 			if err != nil {
 				return nil, err
@@ -1458,7 +1468,10 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 				return nil, err
 			}
 
-			pattern = make([]byte, 0, 256)
+			scratchP := d.scratchPool.Get().(*[]byte)
+			defer func() { d.scratchPool.Put(scratchP) }()
+			pattern = (*scratchP)[0:0]
+
 			pattern, err = d.convertCString(pattern)
 			if err != nil {
 				return nil, err
@@ -1493,7 +1506,11 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 			// Copy options to separate data for validation/sorting.  Keep
 			// a copy of the original reader for error reporting.
 			peek := d.copyPeek(parseErrorContextLength)
-			options = make([]byte, 0, 256)
+
+			scratchP := d.scratchPool.Get().(*[]byte)
+			defer func() { d.scratchPool.Put(scratchP) }()
+			options = (*scratchP)[0:0]
+
 			options, err = d.convertCString(options)
 			if err != nil {
 				return nil, err

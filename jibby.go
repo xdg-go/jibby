@@ -54,9 +54,11 @@ func NewDecoder(json *bufio.Reader) (*Decoder, error) {
 	}
 
 	d := &Decoder{
-		json:        json,
-		maxDepth:    200,
-		scratchPool: &sync.Pool{New: func() interface{} { return make([]byte, 0, 256) }},
+		json:     json,
+		maxDepth: 200,
+		scratchPool: &sync.Pool{
+			New: func() interface{} { buf := make([]byte, 0, 256); return &buf },
+		},
 	}
 
 	ch, err := d.readAfterWS()
@@ -512,7 +514,18 @@ func (d *Decoder) copyPeek(length int) []byte {
 	if len(buf) == 0 {
 		return nil
 	}
-	out := make([]byte, len(buf))
+
+	var out []byte
+
+	scratchP := d.scratchPool.Get().(*[]byte)
+	defer func() { d.scratchPool.Put(scratchP) }()
+	if len(*scratchP) < len(buf) {
+		out = make([]byte, len(buf))
+		scratchP = &out
+	} else {
+		out = (*scratchP)[0:len(buf)]
+	}
+
 	copy(out, buf)
 	return out
 }
