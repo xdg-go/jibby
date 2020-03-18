@@ -963,7 +963,7 @@ func (d *Decoder) convertOptions(out []byte, typeBytePos int) ([]byte, error) {
 			return nil, err
 		}
 	}
-	if dollarRegexQueryOpRe.Match(buf) {
+	if dollarOptionsQueryOpRe.Match(buf) {
 		return nil, nil
 	}
 
