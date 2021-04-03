@@ -1,6 +1,10 @@
 # jibby - High-performance streaming JSON-to-BSON decoder in Go
 
-[![GoDoc](https://godoc.org/github.com/xdg-go/jibby?status.svg)](https://godoc.org/github.com/xdg-go/jibby) [![Build Status](https://travis-ci.org/xdg-go/jibby.svg?branch=master)](https://travis-ci.org/xdg-go/jibby) [![codecov](https://codecov.io/gh/xdg-go/jibby/branch/master/graph/badge.svg)](https://codecov.io/gh/xdg-go/jibby) [![Go Report Card](https://goreportcard.com/badge/github.com/xdg-go/jibby)](https://goreportcard.com/report/github.com/xdg-go/jibby) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go Reference](https://pkg.go.dev/badge/github.com/xdg-go/jibby.svg)](https://pkg.go.dev/github.com/xdg-go/jibby)
+[![Go Report Card](https://goreportcard.com/badge/github.com/xdg-go/jibby)](https://goreportcard.com/report/github.com/xdg-go/jibby)
+[![Github Actions](https://github.com/xdg-go/jibby/actions/workflows/test.yml/badge.svg)](https://github.com/xdg-go/jibby/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/xdg-go/jibby/branch/master/graph/badge.svg)](https://codecov.io/gh/xdg-go/jibby)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 > _jibby: A general term to describe an exceptionally positive vibe, attitude,
 > or influence._
