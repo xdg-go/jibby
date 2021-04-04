@@ -93,6 +93,19 @@ func TestJSONTestSuite_ImplDefined(t *testing.T) {
 	}
 }
 
+// GODRIVER-1947: The MongoDB Go driver doesn't properly handle surrogate pairs
+// yet, so we allow different results for these.
+var godriver1947 = map[string]bool{
+	"y_string_unicode_U+1FFFE_nonchar.json":                  true,
+	"y_string_unicode_U+10FFFE_nonchar.json":                 true,
+	"y_string_surrogates_U+1D11E_MUSICAL_SYMBOL_G_CLEF.json": true,
+	"y_string_last_surrogates_1_and_2.json":                  true,
+	"y_string_accepted_surrogate_pair.json":                  true,
+	"y_string_accepted_surrogate_pairs.json":                 true,
+	"i_string_inverted_surrogates_U+1D11E.json":              true,
+	"i_string_incomplete_surrogates_escape_valid.json":       true,
+}
+
 func testPassingConversion(t *testing.T, f string, allowedErrStrings []string) {
 	t.Helper()
 	text, err := ioutil.ReadFile(f)
@@ -116,6 +129,10 @@ func testPassingConversion(t *testing.T, f string, allowedErrStrings []string) {
 		return
 	}
 	if !bytes.Equal(jibbyGot, driverGot) {
+		baseName := filepath.Base(f)
+		if godriver1947[baseName] {
+			return
+		}
 		t.Fatalf("jibby doesn't match Go driver:\njibby:  %v\nDriver: %v", hex.EncodeToString(jibbyGot), hex.EncodeToString(driverGot))
 	}
 }

@@ -14,6 +14,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf16"
 )
 
 // convertValue starts before any bytes of a value have been read.  It detects
@@ -502,8 +504,55 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 						_, _ = d.json.Discard(i)
 						return nil, d.parseError(nil, fmt.Sprintf("converting unicode escape: %v", err))
 					}
-					out = append(out, []byte(string(rune(int32(n))))...)
+					r := rune(int32(n))
+					// a surrogate pair requires another \uXXXX
+					if utf16.IsSurrogate(r) {
+						// "\uXXXX\uYYYY" needs up to 12 chars total.  If we
+						// don't have it, we want to re-peek to get another
+						// batch of up to 64 bytes.  We'll start by requiring 7,
+						// the first surrogate plus a either a trailing quote or
+						// a new escape, which is the shortest possible legal
+						// string from this position.
+						if len(buf)-i < 7 {
+							charsNeeded = 7
+							break INNER
+						}
+
+						// Store first rune; prepare to fallback to replacement
+						// char if any part of second rune handling fails.
+						r1 := r
+						r = unicode.ReplacementChar
+
+						if buf[i+6] == '\\' {
+							// If we're here, we know we need at least one more
+							// to determine the kind of escape it is.
+							if len(buf)-i < 8 {
+								charsNeeded = 8
+								break INNER
+							}
+
+							if buf[i+7] == 'u' {
+								n, err := strconv.ParseUint(string(buf[i+8:i+12]), 16, 32)
+								if err != nil {
+									_, _ = d.json.Discard(i + 6)
+									return nil, d.parseError(nil, fmt.Sprintf("converting unicode escape: %v", err))
+								}
+								r2 := rune(int32(n))
+								// If r2 is a surrogate, we know we can advance past
+								// the first surrogate and decode them together.  If
+								// not, then we don't advance: we'll emit a
+								// replacement character and skip only the broken
+								// first pair.  This new escape will be dealt with
+								// on the next pass through the loop.
+								if utf16.IsSurrogate(r2) {
+									i += 6
+									r = utf16.DecodeRune(r1, r2)
+								}
+							}
+						}
+					}
 					i += 5
+					out = append(out, []byte(string(r))...)
 				default:
 					msg := fmt.Sprintf("unknown escape '%s'", string(buf[i+1]))
 					_, _ = d.json.Discard(i)

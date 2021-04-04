@@ -88,6 +88,31 @@ func TestUnmarshal(t *testing.T) {
 			output: "190000000261000D000000E29886E29886E29886E298860000",
 		},
 		{
+			label:  "Outside BMP with surrogates (\U0001D11E)",
+			input:  `{"a" : "\uD834\uDD1E"}`,
+			output: "1100000002610005000000f09d849e0000",
+		},
+		{
+			label:  "Lone surrogate",
+			input:  `{"a" : "\uD834"}`,
+			output: "1000000002610004000000efbfbd0000",
+		},
+		{
+			label:  "Lone surrogate with trailing text",
+			input:  `{"a" : "\uD834a"}`,
+			output: "1100000002610005000000efbfbd610000",
+		},
+		{
+			label:  "Lone surrogate with trailing non-unicode escape",
+			input:  `{"a" : "\uD834\n"}`,
+			output: "1100000002610005000000efbfbd0a0000",
+		},
+		{
+			label:  "Lone surrogate with trailing unicode escape",
+			input:  `{"a" : "\uD834\u00e9"}`,
+			output: "1200000002610006000000efbfbdc3a90000",
+		},
+		{
 			label:  "Embedded nulls",
 			input:  `{"a" : "ab\u0000bab\u0000babab"}`,
 			output: "190000000261000D0000006162006261620062616261620000",
@@ -103,6 +128,16 @@ func TestUnmarshal(t *testing.T) {
 			output: "4d000000026100410000006161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161610a0000",
 		},
 		{
+			label:  "unicode surrogate escape on buffer boundary",
+			input:  `{"a" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\uD834\uDD1E"}`,
+			output: "4b0000000261003f00000061616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161f09d849e0000",
+		},
+		{
+			label:  "unicode bad surrogate escape on buffer boundary",
+			input:  `{"a" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\uD834\n"}`,
+			output: "4a0000000261003e000000616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161efbfbd0a0000",
+		},
+		{
 			label:  "invalid unicode escape",
 			input:  `{"a" : "\u00zz"}`,
 			errStr: "converting unicode escape",
@@ -115,6 +150,11 @@ func TestUnmarshal(t *testing.T) {
 		{
 			label:  "invalid unicode escape",
 			input:  `{"a" : "\u-062"}`,
+			errStr: "converting unicode escape",
+		},
+		{
+			label:  "invalid unicode escape in second surrogate pair",
+			input:  `{"a" : "\ud834\u-062"}`,
 			errStr: "converting unicode escape",
 		},
 		{
