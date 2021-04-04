@@ -502,7 +502,7 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 						_, _ = d.json.Discard(i)
 						return nil, d.parseError(nil, fmt.Sprintf("converting unicode escape: %v", err))
 					}
-					out = append(out, []byte(string(n))...)
+					out = append(out, []byte(string(rune(int32(n))))...)
 					i += 5
 				default:
 					msg := fmt.Sprintf("unknown escape '%s'", string(buf[i+1]))
