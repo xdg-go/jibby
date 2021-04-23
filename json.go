@@ -532,6 +532,12 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 							}
 
 							if buf[i+7] == 'u' {
+								// If we're here, then we know we need the full
+								// 12 bytes for `\uXXXX\uXXXX`.
+								if len(buf)-i < 12 {
+									charsNeeded = 12
+									break INNER
+								}
 								n, err := strconv.ParseUint(string(buf[i+8:i+12]), 16, 32)
 								if err != nil {
 									_, _ = d.json.Discard(i + 6)
