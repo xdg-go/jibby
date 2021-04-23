@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- n/a
+## v0.1.7 - 2021-04-23
+
+- Fix potential panic reading surrogate pairs across buffer boundaries
 
 ## v0.1.6 – 2021-04-04
 
