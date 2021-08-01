@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.1.8 - 2021-04-23
+
+### Dependencies
+
+- Bump MongoDB Go driver dependency to v1.5.1 to address
+  [CVE-2021-20329](https://www.cvedetails.com/cve/CVE-2021-20329/)
+
 ## v0.1.7 - 2021-04-23
 
 - Fix potential panic reading surrogate pairs across buffer boundaries
