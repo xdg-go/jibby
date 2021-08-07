@@ -23,7 +23,7 @@ documents.  Key features include:
 
 # Examples
 
-```
+```golang
 import (
 	"bufio"
 	"bytes"
