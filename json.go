@@ -18,6 +18,8 @@ import (
 	"unicode/utf16"
 )
 
+var errNullEscape = errors.New("string escape mapped to null byte")
+
 // convertValue starts before any bytes of a value have been read.  It detects
 // the value's type and dispatches to a handler.  It supports all JSON value
 // types. (The `convertObject` handler handles extended JSON.)
@@ -186,6 +188,9 @@ func (d *Decoder) convertObjectElement(out []byte) ([]byte, error) {
 	// Convert key as Cstring
 	out, err = d.convertCString(out)
 	if err != nil {
+		if err == errNullEscape {
+			return nil, d.parseError(nil, errNullEscape.Error())
+		}
 		return nil, err
 	}
 
@@ -435,6 +440,7 @@ func (d *Decoder) convertInt(out []byte, typeBytePos int, buf []byte) ([]byte, e
 // string and its closing quote have been consumed from the input.
 func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 	var terminated bool
+	var sawNullEscape bool
 
 	// charsNeeded indicates how much we expect to peek ahead.  Normally, we
 	// always expect to peek at least 1 ahead (for the closing quote), but when
@@ -557,6 +563,9 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 							}
 						}
 					}
+					if r == 0 {
+						sawNullEscape = true
+					}
 					i += 5
 					out = append(out, []byte(string(r))...)
 				default:
@@ -590,6 +599,10 @@ func (d *Decoder) convertCString(out []byte) ([]byte, error) {
 	// C-string null terminator
 	out = append(out, 0)
 
+	if sawNullEscape {
+		return out, errNullEscape
+	}
+
 	return out, nil
 }
 
@@ -600,7 +613,8 @@ func (d *Decoder) convertString(out []byte) ([]byte, error) {
 	out = append(out, emptyLength...)
 
 	out, err := d.convertCString(out)
-	if err != nil {
+	// For String, a null byte in the string is allowed
+	if err != nil && err != errNullEscape {
 		return nil, err
 	}
 
