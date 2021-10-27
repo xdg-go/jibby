@@ -283,7 +283,9 @@ func (d *Decoder) convertCode(out []byte, typeBytePos int) ([]byte, error) {
 	codeCString := (*scratchP)[0:0]
 
 	codeCString, err = d.convertCString(codeCString)
-	if err != nil {
+	// Code string could contain null byte because it's represented as
+	// length-prefixed BSON string.
+	if err != nil && err != errNullEscape {
 		return nil, err
 	}
 
@@ -1474,6 +1476,9 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 
 			pattern, err = d.convertCString(pattern)
 			if err != nil {
+				if err == errNullEscape {
+					return nil, d.parseError(nil, errNullEscape.Error())
+				}
 				return nil, err
 			}
 
@@ -1513,6 +1518,9 @@ func (d *Decoder) convertRegularExpression(out []byte) ([]byte, error) {
 
 			options, err = d.convertCString(options)
 			if err != nil {
+				if err == errNullEscape {
+					return nil, d.parseError(nil, errNullEscape.Error())
+				}
 				return nil, err
 			}
 
