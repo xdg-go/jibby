@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+## v0.1.9 - 2021-10-27
+
 ### Behavior changes
 
-- Following changes to MongoDB Extended JSON specification, jibby now errors
-  on literal null bytes in keys or in regular expression pattern or options.
-  This is a change from the JSONTestSuite by Nicholas Seriot, which permits
-  nulls in keys.
+- Following changes to the MongoDB Extended JSON specification, jibby now
+  errors on literal null bytes in keys or in regular expression patterns or
+  options.  This is a deviation from the JSONTestSuite by Nicholas Seriot,
+  which permits nulls in keys, but is consistent with the BSON specification,
+  which does not.
 
 ### Features
 
