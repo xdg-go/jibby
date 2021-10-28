@@ -9,10 +9,14 @@
   This is a change from the JSONTestSuite by Nicholas Seriot, which permits
   nulls in keys.
 
-## Features
+### Features
 
 - Added support for the Extended JSON `$uuid` alias for parsing UUID strings
   as binary subtype 4.
+
+### Testing
+
+- Synchronized BSON corpus tests with the MongoDB source corpus.
 
 ## v0.1.8 - 2021-04-23
 
