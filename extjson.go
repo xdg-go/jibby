@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -35,6 +36,7 @@ import (
 // $code
 // $date
 // $type -- option for legacy $binary
+// $uuid -- treated as $binary with subtype 4
 // $scope
 // $regex -- legacy regular expression
 // $binary
@@ -101,7 +103,7 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 			return d.convertOID(out)
 		}
 		return nil, nil
-	case 5: // $code $date $type
+	case 5: // $code $date $type $uuid
 		if bytes.Equal(key, jsonCode) {
 			// Still don't know if this is code or code w/scope, so can't
 			// assign type yet, but we can consume the key.
@@ -115,6 +117,10 @@ func (d *Decoder) handleExtJSON(out []byte, typeBytePos int) ([]byte, error) {
 			// Still don't know if this is binary or a $type query operator, so
 			// can't assign type or discard anything yet.
 			return d.convertType(out, typeBytePos)
+		} else if bytes.Equal(key, jsonUUID) {
+			overwriteTypeByte(out, typeBytePos, bsonBinary)
+			_, _ = d.json.Discard(7)
+			return d.convertUUID(out)
 		}
 		return nil, nil
 	case 6: // $scope $regex
@@ -890,6 +896,54 @@ func (d *Decoder) convertV1Binary(out []byte) ([]byte, error) {
 	}
 
 	overwriteLength(out, lengthPos, binLength)
+
+	return out, nil
+}
+
+// convertUUID starts after the `"$uuid"` key.  The value must be a quoted
+// string that is a valid UUID representation.
+func (d *Decoder) convertUUID(out []byte) ([]byte, error) {
+	// consume ':'
+	err := d.readNameSeparator()
+	if err != nil {
+		return nil, err
+	}
+
+	err = d.readQuoteStart()
+	if err != nil {
+		return nil, err
+	}
+
+	// Peek ahead 33 to 46 characters for min/max UUID string length plus
+	// closing quote.  UUID without dashes is 32 characters; with dashes it's
+	// 36; with dashes and "urn:uuid:" prefix, it's 45.
+	buf, err := d.peekBoundedQuote(33, 46, "UUID")
+	if err != nil {
+		return nil, err
+	}
+
+	// Process buf into UUID, allowing any formats the uuid library recognizes.
+	u, err := uuid.ParseBytes(buf)
+	if err != nil {
+		return nil, d.parseError(buf, fmt.Sprintf("uuid conversion: %v", err))
+	}
+	xs, _ := u.MarshalBinary()
+
+	// Write UUID length, subtype byte 0x04, and UUID bytes
+	lengthPos := len(out)
+	out = append(out, emptyLength...)
+	overwriteLength(out, lengthPos, 16)
+	out = append(out, 0x04)
+	out = append(out, xs...)
+
+	// Discard buffer and trailing quote
+	_, _ = d.json.Discard(len(buf) + 1)
+
+	// Must end with document terminator.
+	err = d.readObjectTerminator()
+	if err != nil {
+		return nil, err
+	}
 
 	return out, nil
 }

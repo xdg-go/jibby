@@ -74,6 +74,7 @@ var jsonOID = []byte{'$', 'o', 'i', 'd'}
 var jsonCode = []byte{'$', 'c', 'o', 'd', 'e'}
 var jsonDate = []byte{'$', 'd', 'a', 't', 'e'}
 var jsonType = []byte{'$', 't', 'y', 'p', 'e'}
+var jsonUUID = []byte{'$', 'u', 'u', 'i', 'd'}
 var jsonScope = []byte{'$', 's', 'c', 'o', 'p', 'e'}
 var jsonRegex = []byte{'$', 'r', 'e', 'g', 'e', 'x'}
 var jsonBinary = []byte{'$', 'b', 'i', 'n', 'a', 'r', 'y'}

@@ -149,6 +149,41 @@ func TestExtJSON(t *testing.T) {
 			output: "13000000057800060000000202000000FFFF00",
 		},
 		{
+			label:  "$uuid, urn prefix, hyphens",
+			input:  `{"x" : { "$uuid" : "urn:uuid:73ffd264-44b3-4c69-90e8-e7d1dfc035d4" }}`,
+			output: "1D000000057800100000000473FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$uuid, no prefix, hyphens",
+			input:  `{"x" : { "$uuid" : "73ffd264-44b3-4c69-90e8-e7d1dfc035d4" }}`,
+			output: "1D000000057800100000000473FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$uuid, no prefix, uppercase, hyphens",
+			input:  `{"x" : { "$uuid" : "73FFD264-44B3-4C69-90E8-E7D1DFC035D4" }}`,
+			output: "1D000000057800100000000473FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$uuid, no prefix, no-hyphens",
+			input:  `{"x" : { "$uuid" : "73ffd26444b34c6990e8e7d1dfc035d4" }}`,
+			output: "1D000000057800100000000473FFD26444B34C6990E8E7D1DFC035D400",
+		},
+		{
+			label:  "$uuid, weird-hyphens",
+			input:  `{"x" : { "$uuid" : "73ffd26-444b34-c69-90e8-e7d1dfc035d4" }}`,
+			errStr: "uuid conversion",
+		},
+		{
+			label:  "$uuid, too long",
+			input:  `{"x" : { "$uuid" : "deadbeef-73ffd26-444b34-c69-90e8-e7d1dfc035d4" }}`,
+			errStr: "uuid conversion",
+		},
+		{
+			label:  "$uuid, too short",
+			input:  `{"x" : { "$uuid" : "3ffd26-444b34-c69-90e8-e7d1dfc035d4" }}`,
+			errStr: "uuid conversion",
+		},
+		{
 			label:  "$code",
 			input:  `{"a" : {"$code" : "abababababab"}}`,
 			output: "190000000D61000D0000006162616261626162616261620000",
