@@ -116,6 +116,14 @@ For a 4.3 MB pure JSON dataset with lots of arrays:
 naive json->bson 32.78 MB/s
 ```
 
+For a 1 GB JSON dataset with small documents (~130 bytes) with only integer values:
+```
+           jibby 97.55 MB/s
+   jibby extjson 97.44 MB/s
+   driver bsonrw 18.20 MB/s
+naive json->bson 14.51 MB/s
+```
+
 The `jibby` and `jibby extjson` figures are jibby without and with extended
 JSON enabled, respectively.  The `driver bsonrw` figures use the MongoDB Go
 driver in a streaming mode with `bsonrw.NewExtJSONValueReader`.  The `naive
