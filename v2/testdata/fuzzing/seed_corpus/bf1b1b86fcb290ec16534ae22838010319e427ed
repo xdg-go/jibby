@@ -1,1 +1,0 @@
-{"":{"$options":"","$regex":{"Expression" : { "pattern": "abc", "options" : "im"}}}}
